@@ -23,6 +23,7 @@ public class PixClientTest {
             System.out.println("[OK] Conectado ao servidor Pix\n");
 
             // Usuário A
+
             System.out.println("### Teste 1: Cadastro de usuário ###");
             String tokenJoao = criarUsuario(reader, writer, "Paulo Plinio", "123.456.789-00", "senha123");
 
@@ -58,7 +59,10 @@ public class PixClientTest {
             System.out.println("\n### Teste 9: Encerrar sessão ###");
             logout(reader, writer, tokenJoao);
 
-            System.out.println("\n>>> Todos os testes foram executados!");
+            // Login João
+            System.out.println("\n### Teste 3: Login do usuário ###");
+            tokenJoao = autenticar(reader, writer, "123.456.789-00", "senha123");
+            
         } catch (IOException e) {
             System.err.println("Erro durante os testes: " + e.getMessage());
         }
@@ -155,7 +159,7 @@ public class PixClientTest {
             for (JsonNode tx : resp.path("dados").path("transacoes")) {
                 System.out.printf("ID %d | Valor: R$ %.2f | Data: %s\n",
                         tx.path("id").asLong(),
-                        tx.path("valor_enviado").asDouble(),
+                        tx.path("valor").asDouble(),
                         tx.path("criado_em").asText());
             }
         }

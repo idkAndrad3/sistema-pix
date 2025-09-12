@@ -187,7 +187,7 @@ public class Validator {
         JsonNode transacoesNode = getRequiredArray(node, "transacoes");
         for (JsonNode transacao : transacoesNode) {
             getRequiredInt(transacao, "id");
-            getRequiredNumber(transacao, "valor_enviado");
+            getRequiredNumber(transacao, "valor");
             
             JsonNode enviadorNode = getRequiredObject(transacao, "usuario_enviador");
             validateStringLength(enviadorNode, "nome", 6, 120);

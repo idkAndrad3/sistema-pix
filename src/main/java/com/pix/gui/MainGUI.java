@@ -15,9 +15,12 @@ import java.awt.event.WindowEvent;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 import javax.swing.BorderFactory;
@@ -511,141 +514,6 @@ public class MainGUI extends JFrame {
     }
     
     private void carregarExtrato() {
-        // Buscar transações dos últimos 30 dias
-        LocalDateTime dataFinal = LocalDateTime.now();
-        LocalDateTime dataInicial = dataFinal.minusDays(30);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
-                .withZone(ZoneOffset.UTC);
-        String dataInicialStr = dataInicial.atZone(ZoneOffset.UTC).format(formatter);
-        String dataFinalStr = dataFinal.atZone(ZoneOffset.UTC).format(formatter);
-
-        PixClient.TransactionResult result = client.lerTransacoes(token, dataInicialStr, dataFinalStr);
-
-        if (result.isSuccess() && result.getTransacoes() != null) {
-            try {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode transacoes = mapper.readTree(result.getTransacoes());
-
-                // limpar tabela
-                tableModel.setRowCount(0);
-
-                for (JsonNode transacao : transacoes) {
-                    // --- DATA: aceita 'criado_em' (velho) ou 'data_hora' (novo) ---
-                    String dataRaw = null;
-                    if (!transacao.path("criado_em").isMissingNode() && !transacao.path("criado_em").asText().isEmpty()) {
-                        dataRaw = transacao.path("criado_em").asText();
-                    } else if (!transacao.path("data_hora").isMissingNode() && !transacao.path("data_hora").asText().isEmpty()) {
-                        dataRaw = transacao.path("data_hora").asText();
-                    } else {
-                        dataRaw = ""; // fallback
-                    }
-
-                    // Tentar parsear a data com alguns formatters seguros
-                    String dataFormatada = dataRaw;
-                    if (!dataRaw.isEmpty()) {
-                        try {
-                            LocalDateTime dt = LocalDateTime.parse(dataRaw, DateTimeFormatter.ISO_DATE_TIME);
-                            dataFormatada = dt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
-                        } catch (Exception e1) {
-                            try {
-                                LocalDateTime dt2 = LocalDateTime.parse(dataRaw, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-                                dataFormatada = dt2.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
-                            } catch (Exception e2) {
-                                // se não conseguir parsear, mantém o raw (ou você pode mostrar vazio)
-                                dataFormatada = dataRaw;
-                            }
-                        }
-                    }
-
-                    // --- VALOR: pode ser 'valor' (velho) ou 'valor' (novo) ---
-                    double valor = 0.0;
-                    if (transacao.has("valor")) {
-                        valor = transacao.path("valor").asDouble(0.0);
-                    } else {
-                        valor = transacao.path("valor").asDouble(0.0);
-                    }
-
-                    // --- ORIGEM / DESTINO: se houver objetos de usuário, pega nome/cpf, senão usa cpf_origem/cpf_destino ---
-                    String cpfEnviador = "";
-                    String nomeEnviador = "";
-                    String cpfRecebedor = "";
-                    String nomeRecebedor = "";
-
-                    JsonNode enviadorNode = transacao.path("usuario_enviador");
-                    JsonNode recebedorNode = transacao.path("usuario_recebedor");
-
-                    if (!enviadorNode.isMissingNode() && enviadorNode.isObject()) {
-                        cpfEnviador = enviadorNode.path("cpf").asText("");
-                        nomeEnviador = enviadorNode.path("nome").asText("");
-                    } else {
-                        cpfEnviador = transacao.path("cpf_origem").asText("");
-                        // nomeEnviador pode ficar vazio (ou buscar via client.usuarioLer se desejar)
-                    }
-
-                    if (!recebedorNode.isMissingNode() && recebedorNode.isObject()) {
-                        cpfRecebedor = recebedorNode.path("cpf").asText("");
-                        nomeRecebedor = recebedorNode.path("nome").asText("");
-                    } else {
-                        cpfRecebedor = transacao.path("cpf_destino").asText("");
-                        // nomeRecebedor pode ficar vazio
-                    }
-
-                    // --- TIPO / origem_destino montagem ---
-                    String tipoRaw = transacao.path("tipo").asText("");
-                    String tipo = "";
-                    String origem_destino = "";
-
-                    // Normaliza tipos comuns
-                    if (tipoRaw.equalsIgnoreCase("enviada") || tipoRaw.equalsIgnoreCase("envio") || tipoRaw.equalsIgnoreCase("enviar")) {
-                        tipo = "Enviado";
-                        // mostrar destinatário
-                        if (!nomeRecebedor.isEmpty()) origem_destino = nomeRecebedor + " (" + cpfRecebedor + ")";
-                        else origem_destino = cpfRecebedor;
-                    } else if (tipoRaw.equalsIgnoreCase("recebida") || tipoRaw.equalsIgnoreCase("recebimento")) {
-                        tipo = "Recebido";
-                        if (!nomeEnviador.isEmpty()) origem_destino = nomeEnviador + " (" + cpfEnviador + ")";
-                        else origem_destino = cpfEnviador;
-                    } else {
-                        // fallback: tenta inferir pela presença de cpf_origem == meu cpf
-                        String meuCpf = ""; // se você tiver a variável token->cpf disponível aqui, ajuste
-                        // se o registro tem cpf_origem igual ao usuário logado, é envio
-                        if (!transacao.path("cpf_origem").asText("").isEmpty() && transacao.path("cpf_origem").asText("").equals(meuCpf)) {
-                            tipo = "Enviado";
-                            origem_destino = transacao.path("cpf_destino").asText("");
-                        } else {
-                            tipo = tipoRaw.isEmpty() ? "-" : tipoRaw;
-                            // mostrar um resumo
-                            if (!nomeRecebedor.isEmpty()) origem_destino = nomeRecebedor + " (" + cpfRecebedor + ")";
-                            else if (!nomeEnviador.isEmpty()) origem_destino = nomeEnviador + " (" + cpfEnviador + ")";
-                            else origem_destino = transacao.path("cpf_origem").asText("") + " -> " + transacao.path("cpf_destino").asText("");
-                        }
-                    }
-
-                    // Formatar valor com currencyFormat (presumindo que existe no seu MainGUI)
-                    String valorStr;
-                    try {
-                        valorStr = currencyFormat.format(valor);
-                    } catch (Exception ex) {
-                        valorStr = String.format("R$ %.2f", valor);
-                    }
-
-                    // Adicionar linha na tabela (colunas: data, tipo, valor, origem/destino) — ajuste se seu TableModel tiver outras colunas
-                    tableModel.addRow(new Object[] {
-                        dataFormatada,
-                        tipo,
-                        valorStr,
-                        origem_destino
-                    });
-                }
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao processar extrato: " + e.getMessage(),
-                                            "Erro", JOptionPane.ERROR_MESSAGE);
-            }
-        } else {
-            tableModel.setRowCount(0);
-        }
     }
     
     private void realizarLogout() {
@@ -665,12 +533,7 @@ public class MainGUI extends JFrame {
 
     // ------------------ utilitários para campo de moeda ------------------
 
-    /**
-     * DocumentFilter simples que mantém apenas dígitos e formata como moeda BR
-     * interpretando os dígitos como centavos (digitar '1' => R$ 0,01).
-     * Observação: comportamento de edição é simples (append/remove do final),
-     * suficiente para entradas rápidas. Se quiser edição caret-aware, posso adaptar.
-     */
+   
     private static class CurrencyDocumentFilter extends DocumentFilter {
         private final NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
