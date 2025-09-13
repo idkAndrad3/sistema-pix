@@ -329,7 +329,7 @@ public class PixServer {
 			return new RespostaBase("depositar", false, "Token inválido ou expirado");
 		}
 
-		double valor = req.path("valor").asDouble(0);
+		double valor = req.path("valor_enviado").asDouble(0);
 
 		if (valor <= 0) {
 			return new RespostaBase("depositar", false, "Valor deve ser positivo");
