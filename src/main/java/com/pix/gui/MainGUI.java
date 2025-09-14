@@ -36,6 +36,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.AbstractDocument;
@@ -48,9 +49,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pix.client.PixClient;
 
-/**
- * Interface gráfica principal do cliente NewPix.
- */
+// ---- FlatLaf ----
+import com.formdev.flatlaf.FlatLightLaf;
+
 public class MainGUI extends JFrame {
     
     private PixClient client;
@@ -83,6 +84,13 @@ public class MainGUI extends JFrame {
     public MainGUI(PixClient client, String token) {
         this.client = client;
         this.token = token;
+
+        // ---- aplica FlatLaf antes de construir a UI ----
+        try {
+            FlatLightLaf.setup();
+        } catch (Exception ex) {
+            System.err.println("Falha ao aplicar FlatLaf: " + ex.getMessage());
+        }
         
         initializeComponents();
         setupLayout();
@@ -92,7 +100,7 @@ public class MainGUI extends JFrame {
     }
     
     private void initializeComponents() {
-        setTitle("NewPix - Sistema Bancário");
+        setTitle("Sistema Pix - Sistema Bancário");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setSize(900, 700);
         setLocationRelativeTo(null);
@@ -105,15 +113,12 @@ public class MainGUI extends JFrame {
         saldoLabel.setForeground(new Color(0, 150, 0));
         
         // Campos para PIX
-        // Valor: campo texto com DocumentFilter que formata moeda enquanto digita
-        valorPixField = new  JFormattedTextField();
+        valorPixField = new JFormattedTextField();
         ((AbstractDocument) valorPixField.getDocument()).setDocumentFilter(new CurrencyDocumentFilter());
         valorPixField.setColumns(15);
-        // inicializar com 0,00 (opcional)
         NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         valorPixField.setText(nf.format(0.0));
         
-        // CPF destino: JFormattedTextField com máscara
         try {
             MaskFormatter cpfMask = new MaskFormatter("###.###.###-##");
             cpfMask.setPlaceholderCharacter('_');
@@ -159,6 +164,7 @@ public class MainGUI extends JFrame {
         depositoButton.setBackground(new Color(50, 200, 100));
         depositoButton.setForeground(Color.WHITE);
     }
+    
     
     private void setupLayout() {
         setLayout(new BorderLayout());

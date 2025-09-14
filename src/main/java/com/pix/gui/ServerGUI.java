@@ -18,9 +18,11 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 
 import com.pix.server.PixServer;
+
+// ---- FlatLaf ----
+import com.formdev.flatlaf.FlatLightLaf;
 
 /**
  * Interface gráfica para o servidor PIX integrado com banco de dados.
@@ -34,6 +36,13 @@ public class ServerGUI extends JFrame {
     private boolean serverRunning = false;
 
     public ServerGUI() {
+        // ---- aplica FlatLaf antes de inicializar ----
+        try {
+            FlatLightLaf.setup();
+        } catch (Exception ex) {
+            System.err.println("Falha ao aplicar FlatLaf: " + ex.getMessage());
+        }
+
         initializeComponents();
         setupLayout();
         setupEventHandlers();
@@ -78,7 +87,7 @@ public class ServerGUI extends JFrame {
         
         // Panel inferior com informações
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        bottomPanel.add(new JLabel("Porta: "+PixServer.getPort()+ "| Banco: sistema-pix | Host: localhost:3306"));
+        bottomPanel.add(new JLabel("Porta: " + PixServer.getPort() + " | Banco: sistema-pix | Host: localhost:3306"));
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -108,7 +117,7 @@ public class ServerGUI extends JFrame {
             statusLabel.setText("Status: Rodando");
             statusLabel.setForeground(Color.GREEN);
             
-            appendLog("Servidor iniciado na porta "+PixServer.getPort());
+            appendLog("Servidor iniciado na porta " + PixServer.getPort());
             appendLog("Conectado ao banco de dados MySQL");
             appendLog("Aguardando conexões de clientes...");
             
@@ -153,14 +162,7 @@ public class ServerGUI extends JFrame {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getLookAndFeel());
-            } catch (Exception e) {
-                // Usar look and feel padrão
-            }
-            
             new ServerGUI().setVisible(true);
         });
     }
 }
-
