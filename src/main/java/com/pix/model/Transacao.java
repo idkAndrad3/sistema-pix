@@ -33,4 +33,7 @@ public class Transacao {
     public String getOrigem() { return cpfOrigem; }
     public String getDestino() { return cpfDestino; }
     public LocalDateTime getDataHora() { return criadoEm; }
+    public void setId(long id) { this.id = id; }
+    public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
+    public void setAtualizadoEm(LocalDateTime atualizadoEm) { this.atualizadoEm = atualizadoEm; }
 }
