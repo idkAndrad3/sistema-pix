@@ -56,7 +56,7 @@ public class ServerGUI extends JFrame {
         statusLabel = new JLabel("Status: Parado");
         statusLabel.setForeground(Color.RED);
         
-        server = new PixServer(8080);
+        server = new PixServer(25444); //Aqui é onde inicia o Server na porta 25444
     }
 
     private void setupLayout() {
@@ -78,7 +78,7 @@ public class ServerGUI extends JFrame {
         
         // Panel inferior com informações
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        bottomPanel.add(new JLabel("Porta: 8080 | Banco: sistema_pix | Host: localhost:3306"));
+        bottomPanel.add(new JLabel("Porta: "+PixServer.getPort()+ "| Banco: sistema-pix | Host: localhost:3306"));
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -108,7 +108,7 @@ public class ServerGUI extends JFrame {
             statusLabel.setText("Status: Rodando");
             statusLabel.setForeground(Color.GREEN);
             
-            appendLog("Servidor iniciado na porta 8080");
+            appendLog("Servidor iniciado na porta "+PixServer.getPort());
             appendLog("Conectado ao banco de dados MySQL");
             appendLog("Aguardando conexões de clientes...");
             

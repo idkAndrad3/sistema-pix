@@ -9,7 +9,7 @@ import java.net.Socket;
 
 public class PixClientTest {
     private static final String SERVER_HOST = "localhost";
-    private static final int SERVER_PORT = 8080;
+    private static final int SERVER_PORT = 25444;
     private static final ObjectMapper JSON = new ObjectMapper();
 
     public static void main(String[] args) {
@@ -150,12 +150,12 @@ public class PixClientTest {
         req.put("token", token);
         req.put("data_inicial", "2025-09-01T00:00:00Z");
         req.put("data_final", "2025-09-30T23:59:59Z");
-
+        
         out.println(JSON.writeValueAsString(req));
         JsonNode resp = JSON.readTree(in.readLine());
 
         exibirResposta(resp);
-        if (resp.path("status").asBoolean()) {
+   
             for (JsonNode tx : resp.path("dados").path("transacoes")) {
                 System.out.printf("ID %d | Valor: R$ %.2f | Data: %s\n",
                         tx.path("id").asLong(),
@@ -163,7 +163,7 @@ public class PixClientTest {
                         tx.path("criado_em").asText());
             }
         }
-    }
+    
 
     private static void atualizarUsuario(BufferedReader in, PrintWriter out, String token, String novoNome, String novaSenha) throws IOException {
         ObjectNode req = JSON.createObjectNode();

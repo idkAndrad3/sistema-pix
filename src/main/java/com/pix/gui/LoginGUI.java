@@ -56,7 +56,7 @@ public class LoginGUI extends JFrame {
         
         // Campos de conexão
         hostField = new JTextField("localhost", 15);
-        portField = new JTextField("7777", 8);
+        portField = new JTextField("25444", 8);
         conectarButton = new JButton("Conectar");
         
         // Campo CPF com máscara
@@ -239,7 +239,7 @@ public class LoginGUI extends JFrame {
             return;
         }
 
-        // valida CPF (11 dígitos)
+        
         if (cpfDigits.length() != 14) {
             JOptionPane.showMessageDialog(this, "CPF inválido: informe 11 dígitos.",
                                           "Erro", JOptionPane.ERROR_MESSAGE);
@@ -247,7 +247,7 @@ public class LoginGUI extends JFrame {
         }
 
 
-        // envia cpf formatado
+    
         PixClient.LoginResult result = client.login(cpfDigits, senha);
 
         if (result.isSuccess()) {

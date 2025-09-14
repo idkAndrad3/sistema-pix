@@ -1,41 +1,45 @@
 package com.pix.server;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pix.dao.TransacaoDAO;
-import com.pix.dao.UsuarioDAO;
-import com.pix.model.RespostaBase;
-import com.pix.model.Transacao;
-import com.pix.model.Usuario;
-import com.pix.service.TokenManager;
-import validador.Validator;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Scanner;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import com.pix.model.RespostaBase;
+
+import com.pix.client.PixClient;
+
+
+import validador.Validator;
 
 /**
  * Servidor PIX integrado com banco de dados MySQL. Esta versão substitui o
  * armazenamento em memória por persistência no banco.
  */
 public class PixServer {
-	private final int port;
+	private static int port;
 	private ServerSocket serverSocket;
 	private boolean running = false;
 	private Thread serverThread;
 
 	private static final ObjectMapper mapper = new ObjectMapper();
-	private static final DateTimeFormatter dtf = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-	private static final UsuarioDAO usuarioDAO = new UsuarioDAO();
-	private static final TransacaoDAO transacaoDAO = new TransacaoDAO();
+
 
 	public PixServer(int port) {
 		this.port = port;
 	}
-	
-	
+
+	public static int getPort() {
+		return port;
+	}
+
+
 
 	public void start() throws IOException {
 		if (running)
@@ -87,28 +91,28 @@ public class PixServer {
 					RespostaBase resp;
 					switch (operacao) {
 					case "usuario_criar":
-						resp = opUsuarioCriar(req);
+						resp = PixClient.opUsuarioCriar(req);
 						break;
 					case "usuario_login":
-						resp = opUsuarioLogin(req);
+						resp = PixClient.opUsuarioLogin(req);
 						break;
 					case "usuario_logout":
-						resp = opUsuarioLogout(req);
+						resp = PixClient.opUsuarioLogout(req);
 						break;
 					case "usuario_ler":
-						resp = opUsuarioLer(req);
+						resp = PixClient.opUsuarioLer(req);
 						break;
 					case "transacao_criar":
-						resp = opTransacaoCriar(req);
+						resp = PixClient.opTransacaoCriar(req);
 						break;
 					case "transacao_ler":
-						resp = opTransacaoLer(req);
+						resp = PixClient.opTransacaoLer(req);
 						break;
 					case "depositar":
-						resp = opDepositar(req);
+						resp = PixClient.opDepositar(req);
 						break;
 					case "usuario_atualizar":
-						resp = opUsuarioAtualizar(req);
+						resp = PixClient.opUsuarioAtualizar(req);
 						break;
 					default:
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
@@ -133,273 +137,11 @@ public class PixServer {
 		}
 	}
 
-	private static String validateToken(JsonNode req) {
-		String token = req.path("token").asText("");
-		return TokenManager.validateToken(token);
-	}
 
-	// Operações
-
-	private static RespostaBase opUsuarioCriar(JsonNode req) {
-		String nome = req.path("nome").asText("").trim();
-		String cpf = req.path("cpf").asText("").trim();
-		String senha = req.path("senha").asText("").trim();
-
-		if (nome.isEmpty() || cpf.isEmpty() || senha.isEmpty()) {
-			return new RespostaBase("usuario_criar", false, "Nome, CPF e senha são obrigatórios");
-		}
-
-		if (nome.length() < 6 || nome.length() > 120) {
-			return new RespostaBase("usuario_criar", false, "Nome deve ter entre 6 e 120 caracteres");
-		}
-
-		if (senha.length() < 6 || senha.length() > 120) {
-			return new RespostaBase("usuario_criar", false, "Senha deve ter entre 6 e 120 caracteres");
-		}
-
-		// Verificar se usuário já existe no banco
-		Usuario existente = usuarioDAO.buscarPorCpf(cpf);
-		if (existente != null) {
-			return new RespostaBase("usuario_criar", false, "Usuário já existente");
-		}
-
-		// Criar e salvar novo usuário
-		Usuario u = new Usuario(nome, cpf, senha);
-		usuarioDAO.salvar(u);
-		
-		return new RespostaBase("usuario_criar", true, "Usuário criado com sucesso");
-	}
-
-	private static RespostaBase opUsuarioLogin(JsonNode req) {
-		String cpf = req.path("cpf").asText("").trim();
-		String senha = req.path("senha").asText("").trim();
-
-		if (cpf.isEmpty() || senha.isEmpty()) {
-			return new RespostaBase("usuario_login", false, "CPF e senha são obrigatórios");
-		}
-
-		Usuario u = usuarioDAO.buscarPorCpf(cpf);
-		if (u == null) {
-			return new RespostaBase("usuario_login", false, "Usuário inexistente");
-		}
-
-		if (!u.getSenha().equals(senha)) {
-			return new RespostaBase("usuario_login", false, "Senha inválida");
-		}
-
-		String token = TokenManager.generateToken(cpf);
-		RespostaBase r = new RespostaBase("usuario_login", true, "Login bem-sucedido");
-		r.setToken(token);
-		r.getDados().put("token", token);
-		return r;
-	}
-
-	private static RespostaBase opUsuarioLogout(JsonNode req) {
-		String token = req.path("token").asText("");
-
-		if (token.isEmpty()) {
-			return new RespostaBase("usuario_logout", false, "Token é obrigatório");
-		}
-
-		boolean removed = TokenManager.removeToken(token);
-
-		
-		if (removed) {
-			return new RespostaBase("usuario_logout", true, "Logout realizado com sucesso");
-		} else {
-			return new RespostaBase("usuario_logout", false, "Token inválido ou expirado");
-		}
-	}
-
-	private static RespostaBase opUsuarioLer(JsonNode req) {
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("usuario_ler", false, "Token inválido ou expirado");
-		}
-
-		// Buscar usuário atualizado no banco
-		Usuario u = usuarioDAO.buscarPorCpf(cpf);
-		if (u == null) {
-			return new RespostaBase("usuario_ler", false, "Usuário não encontrado");
-		}
-
-		RespostaBase r = new RespostaBase("usuario_ler", true, "Dados do usuário");
-		java.util.Map<String, Object> usuarioMap = new java.util.HashMap<>();
-		usuarioMap.put("nome", u.getNome());
-		usuarioMap.put("cpf", u.getCpf());
-		usuarioMap.put("saldo", u.getSaldo());
-		r.setUsuario(usuarioMap);
-		r.getDados().put("usuario", usuarioMap);
-		return r;
-
-	}
-
-	private static RespostaBase opTransacaoCriar(JsonNode req) {
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("transacao_criar", false, "Token inválido ou expirado");
-		}
-
-		String cpfDestino = req.path("cpf_destino").asText("").trim();
-		double valor = req.path("valor").asDouble(0);
-
-		if (cpfDestino.isEmpty()) {
-			return new RespostaBase("transacao_criar", false, "CPF de destino é obrigatório");
-		}
-
-		if (valor <= 0) {
-			return new RespostaBase("transacao_criar", false, "Valor deve ser positivo");
-		}
-
-		if (cpf.equals(cpfDestino)) {
-			return new RespostaBase("transacao_criar", false, "Não é possível transferir para si mesmo");
-		}
-
-		// Verificar se usuário de origem existe e tem saldo
-		Usuario origem = usuarioDAO.buscarPorCpf(cpf);
-		if (origem == null) {
-			return new RespostaBase("transacao_criar", false, "Usuário de origem não encontrado");
-		}
-
-		if (origem.getSaldo() < valor) {
-			return new RespostaBase("transacao_criar", false, "Saldo insuficiente");
-		}
-
-		// Verificar se usuário de destino existe
-		Usuario destino = usuarioDAO.buscarPorCpf(cpfDestino);
-		if (destino == null) {
-			return new RespostaBase("transacao_criar", false, "Usuário de destino não encontrado");
-		}
-
-		// Criar e salvar transação (o DAO já atualiza os saldos)
-		Transacao t = new Transacao(cpf, cpfDestino, valor);
-		transacaoDAO.salvar(t);
-
-		RespostaBase r = new RespostaBase("transacao_criar", true, "Transação realizada com sucesso");
-		r.getDados().put("id", t.getId());
-		r.getDados().put("valor", valor);
-		r.getDados().put("data_hora", t.getCriadoEm().format(dtf));
-		return r;
-	}
-
-	private static RespostaBase opTransacaoLer(JsonNode req) {
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
-		}
-
-		// Buscar todas as transações do banco
-		List<Transacao> todasTransacoes = transacaoDAO.listarTodas();
-		List<Map<String, Object>> transacoesUsuario = new ArrayList<>();
-
-		for (Transacao t : todasTransacoes) {
-			if (t.getCpfOrigem().equals(cpf) || t.getCpfDestino().equals(cpf)) {
-				Map<String, Object> transacao = new HashMap<>();
-				transacao.put("id", t.getId());
-				transacao.put("valor", t.getValor());
-				// criar objetos de usuario_enviador / usuario_recebedor (nome + cpf)
-				Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
-				Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
-				Map<String, Object> usuarioEnviador = new HashMap<>();
-				usuarioEnviador.put("nome", enviador != null ? enviador.getNome() : "");
-				usuarioEnviador.put("cpf", t.getCpfOrigem());
-				Map<String, Object> usuarioRecebedor = new HashMap<>();
-				usuarioRecebedor.put("nome", recebedor != null ? recebedor.getNome() : "");
-				usuarioRecebedor.put("cpf", t.getCpfDestino());
-				transacao.put("usuario_enviador", usuarioEnviador);
-				transacao.put("usuario_recebedor", usuarioRecebedor);
-				// datas em ISO8601 UTC
-				String criado = t.getCriadoEm().atZone(java.time.ZoneId.systemDefault())
-						.withZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDateTime().toString() + "Z";
-				transacao.put("criado_em", criado);
-				transacao.put("atualizado_em", criado); // se não houver atualizado, repete criado
-				transacoesUsuario.add(transacao);
-			}
-		}
-
-		RespostaBase r = new RespostaBase("transacao_ler", true, "Transações do usuário");
-		r.setTransacoes(transacoesUsuario);
-		r.getDados().put("transacoes", transacoesUsuario); 
-		return r;
-	}
-
-	private static RespostaBase opDepositar(JsonNode req) {
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("depositar", false, "Token inválido ou expirado");
-		}
-
-		double valor = req.path("valor_enviado").asDouble(0);
-
-		if (valor <= 0) {
-			return new RespostaBase("depositar", false, "Valor deve ser positivo");
-		}
-
-		// Buscar usuário no banco
-		Usuario u = usuarioDAO.buscarPorCpf(cpf);
-		if (u == null) {
-			return new RespostaBase("depositar", false, "Usuário não encontrado");
-		}
-
-		// Atualizar saldo
-		u.addSaldo(valor);
-		usuarioDAO.atualizar(u);
-
-		RespostaBase r = new RespostaBase("depositar", true, "Depósito realizado com sucesso");
-		r.getDados().put("novo_saldo", u.getSaldo());
-		return r;
-	}
-
-	private static RespostaBase opUsuarioAtualizar(JsonNode req) {
-		// Valida token e obtém o CPF do usuário dono do token
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("usuario_atualizar", false, "Token inválido ou expirado");
-		}
-
-		// aceitar duas formas: { usuario: { nome, senha } } ou { nome, senha }
-		// diretamente
-		JsonNode usuarioNode = req.has("usuario") ? req.path("usuario") : req;
-
-		String novoNome = usuarioNode.path("nome").asText(null);
-		String novaSenha = usuarioNode.path("senha").asText(null);
-
-		// Se nenhum campo para atualizar, retorna erro
-		if ((novoNome == null || novoNome.trim().isEmpty()) && (novaSenha == null || novaSenha.trim().isEmpty())) {
-			return new RespostaBase("usuario_atualizar", false, "Nenhum campo para atualizar");
-		}
-
-		// Buscar o usuário atual no banco
-		Usuario u = usuarioDAO.buscarPorCpf(cpf);
-		if (u == null) {
-			return new RespostaBase("usuario_atualizar", false, "Usuário não encontrado");
-		}
-
-		// Atualizar campos (preservar saldo e CPF)
-		if (novoNome != null && !novoNome.trim().isEmpty()) {
-			// validações básicas (opcional)
-			if (novoNome.length() < 6 || novoNome.length() > 120) {
-				return new RespostaBase("usuario_atualizar", false, "Nome deve ter entre 6 e 120 caracteres");
-			}
-			u.setNome(novoNome.trim());
-		}
-		if (novaSenha != null && !novaSenha.trim().isEmpty()) {
-			if (novaSenha.length() < 6 || novaSenha.length() > 120) {
-				return new RespostaBase("usuario_atualizar", false, "Senha deve ter entre 6 e 120 caracteres");
-			}
-			u.setSenha(novaSenha.trim());
-		}
-
-		// Persistir alteração no banco
-		usuarioDAO.atualizar(u);
-
-		// Responder sucesso
-		return new RespostaBase("usuario_atualizar", true, "Dados atualizados com sucesso");
-	}
-
+//Posso excluir, porém deixei para fazer os testes em PixClientTest.java
 	public static void main(String[] args) {
 		try {
-			PixServer server = new PixServer(8080);
+			PixServer server = new PixServer(25444);
 			server.start();
 
 			// Manter o servidor rodando
