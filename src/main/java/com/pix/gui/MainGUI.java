@@ -67,7 +67,6 @@ public class MainGUI extends JFrame {
     private JFormattedTextField cpfDestinoField; // campo CPF com máscara
     private JButton pixButton;
     private JButton atualizarButton;
-    private JButton extratoButton;
     private JButton logoutButton;
     private JTable extratoTable;
     private DefaultTableModel tableModel;
@@ -89,6 +88,7 @@ public class MainGUI extends JFrame {
         setupLayout();
         setupEventHandlers();
         carregarDadosUsuario();
+        carregarExtrato();
     }
     
     private void initializeComponents() {
@@ -135,11 +135,10 @@ public class MainGUI extends JFrame {
         atualizarButton = new JButton("Atualizar Dados");
         
         // Botões de ação
-        extratoButton = new JButton("Atualizar Extrato");
         logoutButton = new JButton("Logout");
         
         // Tabela de extrato
-        String[] columns = {"Data", "Tipo", "Valor", "Origem/Destino"};
+        String[] columns = {"Data", "Valor", "Origem/Destino"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -203,7 +202,6 @@ public class MainGUI extends JFrame {
         
         // Panel inferior - botões de ação
         JPanel actionPanel = new JPanel(new FlowLayout());
-        actionPanel.add(extratoButton);
         actionPanel.add(logoutButton);
         
         add(userPanel, BorderLayout.NORTH);
@@ -364,13 +362,6 @@ public class MainGUI extends JFrame {
             }
         });
         
-        extratoButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                carregarDadosUsuario();
-                carregarExtrato();
-            }
-        });
         
         logoutButton.addActionListener(new ActionListener() {
             @Override
@@ -515,6 +506,7 @@ public class MainGUI extends JFrame {
     }
     
     private void carregarExtrato() {
+    	System.out.println("Carregando extrato...");
     	        if (client == null || token == null || token.trim().isEmpty()) {
     	            JOptionPane.showMessageDialog(this, "Cliente não inicializado ou token inválido",
     	                    "Erro", JOptionPane.ERROR_MESSAGE);
@@ -546,7 +538,7 @@ public class MainGUI extends JFrame {
     	            protected void done() {
     	                try {
     	                    if (result != null && result.isSuccess() && result.getTransacoes() != null) {
-    	                        JsonNode transacoes = MAPPER.readTree(result.getTransacoes());
+    	                    	JsonNode transacoes = MAPPER.readTree(result.getTransacoes());
     	                        // limpar tabela (observar que updates na UI devem ocorrer no EDT; done() já roda no EDT)
     	                       tableModel.setRowCount(0);
     	
@@ -597,19 +589,13 @@ public class MainGUI extends JFrame {
     	                                cpfRecebedor = transacao.path("cpf_destino").asText("");
     	                            }
     	
-    	                            String tipo = transacao.path("tipo").asText("");
-                              String origem_destino;
-    	                            if ("saida".equalsIgnoreCase(tipo) || "transferencia".equalsIgnoreCase(tipo)) {
-    	                                origem_destino = String.format("%s (%s) -> %s (%s)",
-    	                                        nomeEnviador.isEmpty() ? cpfEnviador : nomeEnviador,
-    	                                       cpfEnviador,
-    	                                        nomeRecebedor.isEmpty() ? cpfRecebedor : nomeRecebedor,
-    	                                        cpfRecebedor);
-    	                           } else {
-    	                             origem_destino = String.format("%s (%s)", nomeRecebedor.isEmpty() ? cpfRecebedor : nomeRecebedor, cpfRecebedor);
-    	                           }
-    	
-    	                            tableModel.addRow(new Object[] { dataFormatada, tipo, valorStr, origem_destino });
+    	                           String origem_destino = String.format("%s (%s) -> %s (%s)",
+    	                        		    nomeEnviador.isEmpty() ? cpfEnviador : nomeEnviador,
+    	                        		    cpfEnviador,
+    	                        		    nomeRecebedor.isEmpty() ? cpfRecebedor : nomeRecebedor,
+    	                        		    cpfRecebedor);
+    	                           tableModel.addRow(new Object[] { dataFormatada, valorStr, origem_destino });
+    	                           
     	                        }
     	                    } else {
     	                        tableModel.setRowCount(0);
