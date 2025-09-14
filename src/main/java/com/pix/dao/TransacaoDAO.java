@@ -1,11 +1,16 @@
 package com.pix.dao;
 
-import com.pix.model.Transacao;
-
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.pix.model.Transacao;
 
 /**
  * DAO para persistir transações. Ao salvar, também atualiza os saldos dos usuários envolvidos.
@@ -71,6 +76,41 @@ public class TransacaoDAO {
                 String destino = rs.getString("cpf_destino");
                 double valor = rs.getDouble("valor");
                 Transacao t = new Transacao(origem, destino, valor);
+                lista.add(t);
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return lista;
+    }
+    
+    public List<Transacao> listarPorCpfEData(String cpf, LocalDateTime inicio, LocalDateTime fim) {
+        List<Transacao> lista = new ArrayList<>();
+        String sql = "SELECT id, cpf_origem, cpf_destino, valor, criado_em, atualizado_em FROM transacoes " +
+                     "WHERE (cpf_origem = ? OR cpf_destino = ?) AND criado_em BETWEEN ? AND ? " +
+                     "ORDER BY criado_em DESC";
+
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+
+            pst.setString(1, cpf);
+            pst.setString(2, cpf);
+            pst.setTimestamp(3, Timestamp.valueOf(inicio));
+            pst.setTimestamp(4, Timestamp.valueOf(fim));
+
+            ResultSet rs = pst.executeQuery();
+
+            while (rs.next()) {
+                Transacao t = new Transacao(
+                    rs.getString("cpf_origem"),
+                    rs.getString("cpf_destino"),
+                    rs.getDouble("valor")
+                );
+                t.setId(rs.getLong("id"));
+                t.setCriadoEm(rs.getTimestamp("criado_em").toLocalDateTime());
+                t.setAtualizadoEm(rs.getTimestamp("atualizado_em").toLocalDateTime());
                 lista.add(t);
             }
 
