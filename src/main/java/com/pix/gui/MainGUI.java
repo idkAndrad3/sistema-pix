@@ -15,10 +15,9 @@ import java.awt.event.WindowEvent;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
-import java.time.DateTimeException;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -37,6 +36,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
@@ -73,6 +73,7 @@ public class MainGUI extends JFrame {
     private DefaultTableModel tableModel;
     private JTextField novoNomeField;
     private JPasswordField novaSenhaField;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     
     // Novos componentes para depósito
     private JFormattedTextField valorDepositoField;
@@ -514,7 +515,119 @@ public class MainGUI extends JFrame {
     }
     
     private void carregarExtrato() {
-    }
+    	        if (client == null || token == null || token.trim().isEmpty()) {
+    	            JOptionPane.showMessageDialog(this, "Cliente não inicializado ou token inválido",
+    	                    "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+    	        }
+    	
+    	        setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR));
+    	
+    	        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+    	            private PixClient.TransactionResult result;
+    	
+    	            @Override
+    	            protected Void doInBackground() throws Exception {
+    	            	Instant dataFinal = Instant.now();
+    	            	Instant dataInicial = dataFinal.minus(30, ChronoUnit.DAYS);
+
+    	            	DateTimeFormatter formatter = DateTimeFormatter
+    	            	        .ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    	            	        .withZone(ZoneOffset.UTC);
+
+    	            	String dataInicialStr = formatter.format(dataInicial);
+    	            	String dataFinalStr   = formatter.format(dataFinal);
+    	
+    	                result = client.lerTransacoes(token, dataInicialStr, dataFinalStr);
+    	                return null;
+    	            }
+    	
+    	            @Override
+    	            protected void done() {
+    	                try {
+    	                    if (result != null && result.isSuccess() && result.getTransacoes() != null) {
+    	                        JsonNode transacoes = MAPPER.readTree(result.getTransacoes());
+    	                        // limpar tabela (observar que updates na UI devem ocorrer no EDT; done() já roda no EDT)
+    	                       tableModel.setRowCount(0);
+    	
+    	                        NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    	                        DateTimeFormatter displayFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    	
+    	                        for (JsonNode transacao : transacoes) {
+    	                            // --- DATA: aceita 'criado_em' (velho) ou 'data_hora' (novo) ---
+    	                           String dataRaw = "";
+    	                           if (!transacao.path("criado_em").isMissingNode() && !transacao.path("criado_em").asText().isEmpty()) {
+    	                               dataRaw = transacao.path("criado_em").asText();
+    	                            } else if (!transacao.path("data_hora").isMissingNode() && !transacao.path("data_hora").asText().isEmpty()) {
+    	                               dataRaw = transacao.path("data_hora").asText();
+    	                            }
+    	
+    	                            String dataFormatada = dataRaw;
+    	                            try {
+    	                                Instant inst = Instant.parse(dataRaw);
+    	                                dataFormatada = displayFormatter.withZone(ZoneId.systemDefault()).format(inst);
+    	                            } catch (Exception ex) {
+    	                                // mantém dataRaw se não conseguir parsear
+    	                            }
+    	
+    	                            // --- VALOR ---
+    	                            double valor = transacao.path("valor").asDouble(0.0);
+    	                            String valorStr = nf.format(valor);
+    	
+    	                            // --- ORIGEM / DESTINO ---
+    	                            String cpfEnviador = "";
+    	                            String nomeEnviador = "";
+    	                            String cpfRecebedor = "";
+    	                            String nomeRecebedor = "";
+    	
+    	                            JsonNode enviadorNode = transacao.path("usuario_enviador");
+    	                            JsonNode recebedorNode = transacao.path("usuario_recebedor");
+    	
+    	                            if (!enviadorNode.isMissingNode() && enviadorNode.isObject()) {
+    	                                cpfEnviador = enviadorNode.path("cpf").asText("");
+    	                                nomeEnviador = enviadorNode.path("nome").asText("");
+    	                           } else {
+    	                                cpfEnviador = transacao.path("cpf_origem").asText("");
+    	                            }
+    	
+    	                           if (!recebedorNode.isMissingNode() && recebedorNode.isObject()) {
+    	                                cpfRecebedor = recebedorNode.path("cpf").asText("");
+    	                                nomeRecebedor = recebedorNode.path("nome").asText("");
+    	                            } else {
+    	                                cpfRecebedor = transacao.path("cpf_destino").asText("");
+    	                            }
+    	
+    	                            String tipo = transacao.path("tipo").asText("");
+                              String origem_destino;
+    	                            if ("saida".equalsIgnoreCase(tipo) || "transferencia".equalsIgnoreCase(tipo)) {
+    	                                origem_destino = String.format("%s (%s) -> %s (%s)",
+    	                                        nomeEnviador.isEmpty() ? cpfEnviador : nomeEnviador,
+    	                                       cpfEnviador,
+    	                                        nomeRecebedor.isEmpty() ? cpfRecebedor : nomeRecebedor,
+    	                                        cpfRecebedor);
+    	                           } else {
+    	                             origem_destino = String.format("%s (%s)", nomeRecebedor.isEmpty() ? cpfRecebedor : nomeRecebedor, cpfRecebedor);
+    	                           }
+    	
+    	                            tableModel.addRow(new Object[] { dataFormatada, tipo, valorStr, origem_destino });
+    	                        }
+    	                    } else {
+    	                        tableModel.setRowCount(0);
+    	                        String msg = (result == null) ? "Resposta vazia" : result.getMessage();
+    	                        JOptionPane.showMessageDialog(MainGUI.this, "Não foi possível carregar extrato: " + msg, "Erro", JOptionPane.ERROR_MESSAGE);
+    	                    }
+    	                } catch (Exception e) {
+    	                    e.printStackTrace();
+    	                    JOptionPane.showMessageDialog(MainGUI.this, "Erro ao processar extrato: " + e.getMessage(),
+    	                            "Erro", JOptionPane.ERROR_MESSAGE);
+    	                } finally {
+    	                    setCursor(java.awt.Cursor.getDefaultCursor());
+    	                }
+    	            }
+    	        };
+    	
+    	        worker.execute();
+    	    }
     
     private void realizarLogout() {
         int option = JOptionPane.showConfirmDialog(this, "Deseja realmente sair?", 
