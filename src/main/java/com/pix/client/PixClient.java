@@ -254,7 +254,6 @@ public class PixClient {
             req.put("data_inicial", dataInicial);
             req.put("data_final", dataFinal);
             JsonNode resp = sendRequest(req);
-            System.out.println("Resposta do servidor: " + resp);
             boolean status = resp.path("status").asBoolean();
             String info = resp.path("info").asText();
             String transacoesJson = null;

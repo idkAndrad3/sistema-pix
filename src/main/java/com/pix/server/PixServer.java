@@ -6,7 +6,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +31,7 @@ public class PixServer {
 
 
 	public PixServer(int port) {
-		this.port = port;
+		PixServer.port = port;
 	}
 
 	public static int getPort() {
@@ -137,22 +136,6 @@ public class PixServer {
 		}
 	}
 
-
-//Posso excluir, porém deixei para fazer os testes em PixClientTest.java
 	public static void main(String[] args) {
-		try {
-			PixServer server = new PixServer(25444);
-			server.start();
-
-			// Manter o servidor rodando
-			Scanner scanner = new Scanner(System.in);
-			System.out.println("Pressione Enter para parar o servidor...");
-			scanner.nextLine();
-
-			server.stop();
-			System.out.println("Servidor parado.");
-		} catch (IOException e) {
-			System.err.println("Erro ao iniciar servidor: " + e.getMessage());
-		}
 	}
 }

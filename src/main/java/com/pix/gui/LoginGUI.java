@@ -34,7 +34,6 @@ public class LoginGUI extends JFrame {
     private JFormattedTextField cpfField;
     private JPasswordField senhaField;
     private JButton loginButton;
-    private JButton cadastroButton;
     private JButton conectarButton;
     private JTextField hostField;
     private JTextField portField;

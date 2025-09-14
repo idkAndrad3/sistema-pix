@@ -12,7 +12,8 @@ public class PixClientTest {
     private static final int SERVER_PORT = 25444;
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    public static void main(String[] args) {
+    @SuppressWarnings("unused")
+	public static void main(String[] args) {
         System.out.println(">>> Rodando testes do sistema PIX...\n");
 
         try (
@@ -36,7 +37,6 @@ public class PixClientTest {
             tokenJoao = autenticar(reader, writer, "123.456.789-00", "senha123");
 
             // Consultar usuário
-            System.out.println("\n### Teste 4: Consultar perfil ###");
             consultarUsuario(reader, writer, tokenJoao);
 
             // Depositar
@@ -59,9 +59,6 @@ public class PixClientTest {
             System.out.println("\n### Teste 9: Encerrar sessão ###");
             logout(reader, writer, tokenJoao);
 
-            // Login João
-            System.out.println("\n### Teste 3: Login do usuário ###");
-            tokenJoao = autenticar(reader, writer, "123.456.789-00", "senha123");
             
         } catch (IOException e) {
             System.err.println("Erro durante os testes: " + e.getMessage());

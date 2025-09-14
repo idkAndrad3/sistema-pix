@@ -19,7 +19,6 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JFormattedTextField;
-import javax.swing.SwingUtilities;
 import javax.swing.text.MaskFormatter;
 
 import com.pix.client.PixClient;
