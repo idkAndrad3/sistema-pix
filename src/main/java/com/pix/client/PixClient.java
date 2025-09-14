@@ -254,13 +254,19 @@ public class PixClient {
             req.put("data_inicial", dataInicial);
             req.put("data_final", dataFinal);
             JsonNode resp = sendRequest(req);
+            System.out.println("Resposta do servidor: " + resp);
             boolean status = resp.path("status").asBoolean();
             String info = resp.path("info").asText();
-            String transacoesJson = status ? resp.path("dados").path("transacoes").toString() : null;
+            String transacoesJson = null;
+            if (status && resp.has("transacoes")) {
+                transacoesJson = resp.get("transacoes").toString();
+            }
+            
             return new TransactionResult(status, info, transacoesJson);
         } catch (IOException e) {
             return new TransactionResult(false, "Erro de comunicação: " + e.getMessage(), null);
         }
+    
     }
 	private static String validateToken(JsonNode req) {
 		String token = req.path("token").asText("");
