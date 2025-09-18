@@ -36,7 +36,6 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.AbstractDocument;
@@ -99,8 +98,9 @@ public class MainGUI extends JFrame {
         carregarExtrato();
     }
     
-    private void initializeComponents() {
-        setTitle("Sistema Pix - Sistema Bancário");
+    @SuppressWarnings("serial")
+	private void initializeComponents() {
+        setTitle("PixFácil - Sistema Bancário");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setSize(900, 700);
         setLocationRelativeTo(null);
@@ -151,6 +151,28 @@ public class MainGUI extends JFrame {
             }
         };
         extratoTable = new JTable(tableModel);
+        extratoTable.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(JTable table,
+                    Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+
+                java.awt.Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                // Cor do texto sempre preta
+                c.setForeground(Color.BLACK);
+
+                // Cor de fundo alternada: linhas pares brancas, ímpares cinza claro
+                if (!isSelected) {
+                    if (row % 2 == 0) {
+                        c.setBackground(Color.WHITE);
+                    } else {
+                        c.setBackground(new Color(230, 230, 230));
+                    }
+                }
+
+                return c;
+            }
+        });
         extratoTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         
         // Novos componentes para depósito

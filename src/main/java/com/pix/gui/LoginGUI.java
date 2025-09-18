@@ -60,7 +60,7 @@ public class LoginGUI extends JFrame {
     }
 
     private void initializeComponents() {
-        setTitle("💸 Sistema Pix - Login");
+        setTitle("💸 PixFácil - Login");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(480, 600);
         setLocationRelativeTo(null);
@@ -102,7 +102,7 @@ public class LoginGUI extends JFrame {
         setContentPane(root);
 
         // Painel de título
-        JLabel titleLabel = new JLabel("Sistema Pix");
+        JLabel titleLabel = new JLabel("PixFácil");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         root.add(titleLabel, BorderLayout.NORTH);

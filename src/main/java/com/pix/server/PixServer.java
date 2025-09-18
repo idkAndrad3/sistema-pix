@@ -91,27 +91,35 @@ public class PixServer {
 					switch (operacao) {
 					case "usuario_criar":
 						resp = PixClient.opUsuarioCriar(req);
+						System.out.println(req);
 						break;
 					case "usuario_login":
 						resp = PixClient.opUsuarioLogin(req);
+						System.out.println(req);
 						break;
 					case "usuario_logout":
 						resp = PixClient.opUsuarioLogout(req);
+						System.out.println(req);
 						break;
 					case "usuario_ler":
 						resp = PixClient.opUsuarioLer(req);
+						System.out.println(req);
 						break;
 					case "transacao_criar":
 						resp = PixClient.opTransacaoCriar(req);
+						System.out.println(req);
 						break;
 					case "transacao_ler":
 						resp = PixClient.opTransacaoLer(req);
+						System.out.println(req);
 						break;
 					case "depositar":
 						resp = PixClient.opDepositar(req);
+						System.out.println(req);
 						break;
 					case "usuario_atualizar":
 						resp = PixClient.opUsuarioAtualizar(req);
+						System.out.println(req);
 						break;
 					default:
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");

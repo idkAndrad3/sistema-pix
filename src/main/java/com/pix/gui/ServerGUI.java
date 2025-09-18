@@ -87,7 +87,7 @@ public class ServerGUI extends JFrame {
         
         // Panel inferior com informações
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        bottomPanel.add(new JLabel("Porta: " + PixServer.getPort() + " | Banco: sistema-pix | Host: localhost:3306"));
+        bottomPanel.add(new JLabel("Porta: " + PixServer.getPort() + " | Banco: PixFácil | Host: localhost:3306"));
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
