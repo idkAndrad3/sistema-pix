@@ -151,7 +151,19 @@ public class PixClient {
             JsonNode resp = sendRequest(req);
             boolean status = resp.path("status").asBoolean();
             String info = resp.path("info").asText();
-            String token = status ? resp.path("dados").path("token").asText() : null;
+            String token = null;
+            if (status) {
+                // tenta primeiro em dados.token, se não existir tenta token no root
+                if (resp.path("dados").has("token") && !resp.path("dados").path("token").asText().isEmpty()) {
+                    token = resp.path("dados").path("token").asText();
+                } else if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
+                    token = resp.path("token").asText();
+                } else {
+                    token = null;
+                }
+            }
+            // Log de diagnóstico
+            System.out.println("[DEBUG] login() -> status=" + status + " token='" + (token==null?"null":token) + "'");
             return new LoginResult(status, info, token);
         } catch (IOException e) {
             return new LoginResult(false, "Erro de comunicação: " + e.getMessage(), null);
