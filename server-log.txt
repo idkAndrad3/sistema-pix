@@ -1,0 +1,9 @@
+---- Log salvo em 2025-09-28T16:49:41.996708700
+[16:49:06] Servidor iniciado na porta 25444
+[16:49:06] Conectado ao banco de dados MySQL
+[16:49:06] Aguardando conexões de clientes...
+[16:49:09] Servidor parado
+[16:49:13] Servidor iniciado na porta 25443
+[16:49:13] Conectado ao banco de dados MySQL
+[16:49:13] Aguardando conexões de clientes...
+

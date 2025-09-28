@@ -108,4 +108,43 @@ public class UsuarioDAO {
 
         return usuarios;
     }
+ // (apenas o trecho completo do arquivo já no seu projeto foi sobrescrito; aqui está o método novo)
+ // Local do arquivo: src/main/java/com/pix/dao/UsuarioDAO.java
+ // > O arquivo completo do DAO permanece o mesmo, com a adição abaixo:
+
+     /**
+      * Tenta obter as colunas criado_em e atualizado_em para o usuário
+      * Retorna um array de Strings [criadoEm, atualizadoEm] no formato ISO_LOCAL_DATE_TIME,
+      * ou nulls se as colunas não existirem.
+      */
+     public String[] getTimestamps(String cpf) {
+         String[] res = new String[] { null, null };
+         String sql = "SELECT criado_em, atualizado_em FROM usuarios WHERE cpf = ?";
+         try (Connection conn = DatabaseManager.getInstance().getConnection();
+              PreparedStatement ps = conn.prepareStatement(sql)) {
+             ps.setString(1, cpf);
+             try (ResultSet rs = ps.executeQuery()) {
+                 if (rs.next()) {
+                     try {
+                         Timestamp t1 = rs.getTimestamp("criado_em");
+                         if (t1 != null) res[0] = t1.toLocalDateTime().toString();
+                     } catch (SQLException e) {
+                         // coluna não existe ou outro problema; retornar nulos
+                     }
+                     try {
+                         Timestamp t2 = rs.getTimestamp("atualizado_em");
+                         if (t2 != null) res[1] = t2.toLocalDateTime().toString();
+                     } catch (SQLException e) {
+                         // coluna não existe
+                     }
+                 }
+             }
+         } catch (SQLException e) {
+             // Problema acessando banco; retornamos nulos
+             // e imprimimos stacktrace para debug
+             e.printStackTrace();
+         }
+         return res;
+     }
+
 }

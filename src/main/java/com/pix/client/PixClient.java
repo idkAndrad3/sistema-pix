@@ -364,6 +364,7 @@ public class PixClient {
 		usuarioMap.put("saldo", u.getSaldo());
 		r.setUsuario(usuarioMap);
 		r.getDados().put("usuario", usuarioMap);
+		
 		return r;
 
 	}

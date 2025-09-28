@@ -6,15 +6,20 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pix.model.RespostaBase;
+import com.pix.model.Sessao;
 
 import com.pix.client.PixClient;
-
-
 import validador.Validator;
 
 /**
@@ -29,6 +34,10 @@ public class PixServer {
 
 	private static final ObjectMapper mapper = new ObjectMapper();
 
+	/* tracking de conexões/sessões para a GUI */
+	private final AtomicInteger activeConnections = new AtomicInteger(0);
+	private final AtomicLong sessionIdCounter = new AtomicLong(1);
+	private final ConcurrentHashMap<Long, Sessao> sessions = new ConcurrentHashMap<>();
 
 	public PixServer(int port) {
 		PixServer.port = port;
@@ -38,7 +47,15 @@ public class PixServer {
 		return port;
 	}
 
+	/** Retorna número atual de conexões ativas */
+	public int getActiveConnections() {
+		return activeConnections.get();
+	}
 
+	/** Retorna snapshot da lista de sessões/clients */
+	public List<Sessao> getClientes() {
+		return new ArrayList<>(sessions.values());
+	}
 
 	public void start() throws IOException {
 		if (running)
@@ -52,14 +69,43 @@ public class PixServer {
 			while (running) {
 				try {
 					Socket clientSocket = serverSocket.accept();
-					new Thread(() -> handleClient(clientSocket)).start();
+
+					// registra sessão
+					long sessionId = sessionIdCounter.getAndIncrement();
+					activeConnections.incrementAndGet();
+					Sessao sess = new Sessao(sessionId,
+							clientSocket.getInetAddress().getHostAddress(),
+							clientSocket.getPort(),
+							clientSocket.getInetAddress().getHostName(),
+							"Conectado",
+							LocalDateTime.now());
+					sessions.put(sessionId, sess);
+
+					new Thread(() -> {
+						try {
+							// mantém assinatura original do handleClient
+							handleClient(clientSocket);
+						} finally {
+							// ao finalizar a conexão, atualiza contadores e sessão
+							activeConnections.decrementAndGet();
+							Sessao s = sessions.get(sessionId);
+							if (s != null) {
+								s.setStatus("Desconectado");
+								s.setDesconectadoEm(LocalDateTime.now());
+							}
+							try {
+								clientSocket.close();
+							} catch (IOException ignored) {}
+						}
+					}, "PixClient-" + sessionId).start();
+
 				} catch (IOException e) {
 					if (running) {
 						System.err.println("Erro no servidor: " + e.getMessage());
 					}
 				}
 			}
-		});
+		}, "PixServer-Main");
 		serverThread.start();
 	}
 
@@ -125,13 +171,15 @@ public class PixServer {
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
 					}
 					String jsonResp = mapper.writeValueAsString(resp);
-			        Validator.validateServer(jsonResp);
+					Validator.validateServer(jsonResp);
 
-			        out.println(jsonResp);
-					
+					out.println(jsonResp);
+
 				} catch (Exception e) {
 					RespostaBase erro = new RespostaBase("erro", false, "Erro no processamento: " + e.getMessage());
-					out.println(mapper.writeValueAsString(erro));
+					try {
+						out.println(mapper.writeValueAsString(erro));
+					} catch (Exception ignore) {}
 				}
 			}
 		} catch (IOException e) {
