@@ -129,12 +129,23 @@ public class PixServer {
 			String inputLine;
 			while ((inputLine = in.readLine()) != null) {
 				try {
-					Validator.validateClient(inputLine);
 					JsonNode req = mapper.readTree(inputLine);
 					String operacao = req.path("operacao").asText("");
 
+					if ("conectar".equals(operacao)) {
+	                    RespostaBase resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso.");
+	                    String jsonResp = mapper.writeValueAsString(resp);
+	                    out.println(jsonResp);
+	                    continue; // Pula para a próxima iteração do loop, ignorando o resto do código
+	                }
+					Validator.validateClient(inputLine);
+
 					RespostaBase resp;
 					switch (operacao) {
+					case "conectar":
+						resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso");
+						System.out.println(req);
+						break;
 					case "usuario_criar":
 						resp = PixClient.opUsuarioCriar(req);
 						System.out.println(req);

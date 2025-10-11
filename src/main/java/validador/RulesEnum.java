@@ -3,6 +3,8 @@ package validador;
 import java.util.Objects;
 
 public enum RulesEnum {
+    // Conectar
+    CONECTAR("conectar"),
     // Login e Logoff
     USUARIO_LOGIN("usuario_login"),
     USUARIO_LOGOUT("usuario_logout"),

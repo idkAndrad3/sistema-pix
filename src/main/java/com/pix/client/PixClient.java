@@ -26,259 +26,291 @@ import com.pix.model.Usuario;
 import com.pix.service.TokenManager;
 
 public class PixClient {
-    private String host;
-    private int port;
-    private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
-    private ObjectMapper mapper = new ObjectMapper();
+	private String host;
+	private int port;
+	private Socket socket;
+	private BufferedReader in;
+	private PrintWriter out;
+	private ObjectMapper mapper = new ObjectMapper();
 	private static final DateTimeFormatter dtf = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 	private static final UsuarioDAO usuarioDAO = new UsuarioDAO();
 	private static final TransacaoDAO transacaoDAO = new TransacaoDAO();
 
-    public PixClient(String host, int port) {
-        this.host = host;
-        this.port = port;
-    }
+	public PixClient(String host, int port) {
+		this.host = host;
+		this.port = port;
+	}
 
-    public boolean connect() {
-        try {
-            socket = new Socket(host, port);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-            out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"), true);
-            return true;
-        } catch (IOException e) {
-            System.err.println("Erro ao conectar: " + e.getMessage());
-            return false;
-        }
-    }
+	public boolean connect() {
+		try {
+			socket = new Socket(host, port);
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+			out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"), true);
+			return true;
+		} catch (IOException e) {
+			System.err.println("Erro ao conectar: " + e.getMessage());
+			return false;
+		}
+	}
 
-    public void disconnect() {
-        try {
-            if (socket != null) {
-                socket.close();
-            }
-        } catch (IOException e) {
-            System.err.println("Erro ao desconectar: " + e.getMessage());
-        }
-    }
+	public void disconnect() {
+		try {
+			if (socket != null) {
+				socket.close();
+			}
+		} catch (IOException e) {
+			System.err.println("Erro ao desconectar: " + e.getMessage());
+		}
+	}
 
-    private JsonNode sendRequest(ObjectNode request) throws IOException {
-        out.println(mapper.writeValueAsString(request));
-        String responseStr = in.readLine();
-        if (responseStr == null) {
-            throw new IOException("Conexão encerrada pelo servidor.");
-        }
-        return mapper.readTree(responseStr);
-    }
+	public OperationResult verificarConexaoServidor() {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "conectar");
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
 
-    // --- Classes de Resultado --- //
+	private JsonNode sendRequest(ObjectNode request) throws IOException {
+		out.println(mapper.writeValueAsString(request));
+		String responseStr = in.readLine();
+		if (responseStr == null) {
+			throw new IOException("Conexão encerrada pelo servidor.");
+		}
+		return mapper.readTree(responseStr);
+	}
 
-    public static class OperationResult {
-        private boolean success;
-        private String message;
+	// --- Classes de Resultado --- //
 
-        public OperationResult(boolean success, String message) {
-            this.success = success;
-            this.message = message;
-        }
+	public static class OperationResult {
+		private boolean success;
+		private String message;
 
-        public boolean isSuccess() { return success; }
-        public String getMessage() { return message; }
-    }
+		public OperationResult(boolean success, String message) {
+			this.success = success;
+			this.message = message;
+		}
 
-    public static class LoginResult extends OperationResult {
-        private String token;
+		public boolean isSuccess() {
+			return success;
+		}
 
-        public LoginResult(boolean success, String message, String token) {
-            super(success, message);
-            this.token = token;
-        }
+		public String getMessage() {
+			return message;
+		}
+	}
 
-        public String getToken() { return token; }
-    }
+	public static class LoginResult extends OperationResult {
+		private String token;
 
-    public static class UserDataResult extends OperationResult {
-        private String nome;
-        private String cpf;
-        private double saldo;
+		public LoginResult(boolean success, String message, String token) {
+			super(success, message);
+			this.token = token;
+		}
 
-        public UserDataResult(boolean success, String message, String nome, String cpf, double saldo) {
-            super(success, message);
-            this.nome = nome;
-            this.cpf = cpf;
-            this.saldo = saldo;
-        }
+		public String getToken() {
+			return token;
+		}
+	}
 
-        public String getNome() { return nome; }
-        public String getCpf() { return cpf; }
-        public double getSaldo() { return saldo; }
-    }
+	public static class UserDataResult extends OperationResult {
+		private String nome;
+		private String cpf;
+		private double saldo;
 
-    public static class TransactionResult extends OperationResult {
-        private String transacoesJson; // Manter como string para evitar complexidade de parsing aqui
+		public UserDataResult(boolean success, String message, String nome, String cpf, double saldo) {
+			super(success, message);
+			this.nome = nome;
+			this.cpf = cpf;
+			this.saldo = saldo;
+		}
 
-        public TransactionResult(boolean success, String message, String transacoesJson) {
-            super(success, message);
-            this.transacoesJson = transacoesJson;
-        }
+		public String getNome() {
+			return nome;
+		}
 
-        public String getTransacoes() { return transacoesJson; }
-    }
+		public String getCpf() {
+			return cpf;
+		}
 
-    // --- Métodos de Operação --- //
+		public double getSaldo() {
+			return saldo;
+		}
+	}
 
-    public OperationResult criarUsuario(String cpf, String nome, String senha) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_criar");
-            req.put("nome", nome);
-            req.put("cpf", cpf);
-            req.put("senha", senha);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
+	public static class TransactionResult extends OperationResult {
+		private String transacoesJson; // Manter como string para evitar complexidade de parsing aqui
 
-    public LoginResult login(String cpf, String senha) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_login");
-            req.put("cpf", cpf);
-            req.put("senha", senha);
-            JsonNode resp = sendRequest(req);
-            boolean status = resp.path("status").asBoolean();
-            String info = resp.path("info").asText();
-            String token = null;
-            if (status) {
-                // tenta primeiro em dados.token, se não existir tenta token no root
-                if (resp.path("dados").has("token") && !resp.path("dados").path("token").asText().isEmpty()) {
-                    token = resp.path("dados").path("token").asText();
-                } else if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
-                    token = resp.path("token").asText();
-                } else {
-                    token = null;
-                }
-            }
-            // Log de diagnóstico
-            System.out.println("[DEBUG] login() -> status=" + status + " token='" + (token==null?"null":token) + "'");
-            return new LoginResult(status, info, token);
-        } catch (IOException e) {
-            return new LoginResult(false, "Erro de comunicação: " + e.getMessage(), null);
-        }
-    }
+		public TransactionResult(boolean success, String message, String transacoesJson) {
+			super(success, message);
+			this.transacoesJson = transacoesJson;
+		}
 
-    public OperationResult logout(String token) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_logout");
-            req.put("token", token);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
+		public String getTransacoes() {
+			return transacoesJson;
+		}
+	}
 
-    public UserDataResult lerUsuario(String token) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_ler");
-            req.put("token", token);
+	// --- Métodos de Operação --- //
 
-            JsonNode resp = sendRequest(req);
-            boolean status = resp.path("status").asBoolean(false);
-            String info = resp.path("info").asText("");
+	public OperationResult criarUsuario(String cpf, String nome, String senha) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_criar");
+			req.put("nome", nome);
+			req.put("cpf", cpf);
+			req.put("senha", senha);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
 
-            if (status) {
-                JsonNode dadosNode = resp.path("dados");
-                // aceita duas estruturas: { dados: { usuario: { ... } } } ou { dados: { ... } }
-                JsonNode usuarioNode = dadosNode.has("usuario") ? dadosNode.path("usuario") : dadosNode;
+	public LoginResult login(String cpf, String senha) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_login");
+			req.put("cpf", cpf);
+			req.put("senha", senha);
+			JsonNode resp = sendRequest(req);
+			boolean status = resp.path("status").asBoolean();
+			String info = resp.path("info").asText();
+			String token = null;
+			if (status) {
+				// tenta primeiro em dados.token, se não existir tenta token no root
+				if (resp.path("dados").has("token") && !resp.path("dados").path("token").asText().isEmpty()) {
+					token = resp.path("dados").path("token").asText();
+				} else if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
+					token = resp.path("token").asText();
+				} else {
+					token = null;
+				}
+			}
+			// Log de diagnóstico
+			System.out.println(
+					"[DEBUG] login() -> status=" + status + " token='" + (token == null ? "null" : token) + "'");
+			return new LoginResult(status, info, token);
+		} catch (IOException e) {
+			return new LoginResult(false, "Erro de comunicação: " + e.getMessage(), null);
+		}
+	}
 
-                String nome = usuarioNode.path("nome").asText("");
-                String cpf = usuarioNode.path("cpf").asText("");
-                double saldo = usuarioNode.path("saldo").asDouble(0.0);
+	public OperationResult logout(String token) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_logout");
+			req.put("token", token);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
 
-                return new UserDataResult(true, info, nome, cpf, saldo);
-            } else {
-                return new UserDataResult(false, info, "", "", 0.0);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new UserDataResult(false, "Erro: " + e.getMessage(), "", "", 0.0);
-        }
-    }
+	public UserDataResult lerUsuario(String token) {
+	    try {
+	        ObjectNode req = mapper.createObjectNode();
+	        req.put("operacao", "usuario_ler");
+	        req.put("token", token);
 
-    public OperationResult atualizarUsuario(String token, String novoNome, String novaSenha) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_atualizar");
-            req.put("token", token);
-            ObjectNode usuarioData = mapper.createObjectNode();
-            if (novoNome != null && !novoNome.isEmpty()) {
-                usuarioData.put("nome", novoNome);
-            }
-            if (novaSenha != null && !novaSenha.isEmpty()) {
-                usuarioData.put("senha", novaSenha);
-            }
-            req.set("usuario", usuarioData);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
+	        JsonNode resp = sendRequest(req);
+	        boolean status = resp.path("status").asBoolean(false);
+	        String info = resp.path("info").asText("");
 
-    public OperationResult criarTransacao(String token, double valor, String cpfDestino) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "transacao_criar");
-            req.put("token", token);
-            req.put("valor", valor);
-            req.put("cpf_destino", cpfDestino);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
+	        if (status) {
+	            // ---- INÍCIO DA CORREÇÃO ----
+	            // O protocolo diz que o objeto "usuario" vem direto na resposta.
+	            // Vamos procurá-lo diretamente no objeto 'resp'.
+	            JsonNode usuarioNode = resp.path("usuario");
 
-    public OperationResult depositar(String token, double valor) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "depositar");
-            req.put("token", token);
-            req.put("valor_enviado", valor);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
+	            String nome = usuarioNode.path("nome").asText("");
+	            String cpf = usuarioNode.path("cpf").asText("");
+	            double saldo = usuarioNode.path("saldo").asDouble(0.0);
+	            // ---- FIM DA CORREÇÃO ----
 
-    public TransactionResult lerTransacoes(String token, String dataInicial, String dataFinal) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "transacao_ler");
-            req.put("token", token);
-            req.put("data_inicial", dataInicial);
-            req.put("data_final", dataFinal);
-            JsonNode resp = sendRequest(req);
-            boolean status = resp.path("status").asBoolean();
-            String info = resp.path("info").asText();
-            String transacoesJson = null;
-            if (status && resp.has("transacoes")) {
-                transacoesJson = resp.get("transacoes").toString();
-            }
-            
-            return new TransactionResult(status, info, transacoesJson);
-        } catch (IOException e) {
-            return new TransactionResult(false, "Erro de comunicação: " + e.getMessage(), null);
-        }
-    
-    }
+	            return new UserDataResult(true, info, nome, cpf, saldo);
+	        } else {
+	            return new UserDataResult(false, info, "", "", 0.0);
+	        }
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	        return new UserDataResult(false, "Erro: " + e.getMessage(), "", "", 0.0);
+	    }
+	}
+
+	public OperationResult atualizarUsuario(String token, String novoNome, String novaSenha) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_atualizar");
+			req.put("token", token);
+			ObjectNode usuarioData = mapper.createObjectNode();
+			if (novoNome != null && !novoNome.isEmpty()) {
+				usuarioData.put("nome", novoNome);
+			}
+			if (novaSenha != null && !novaSenha.isEmpty()) {
+				usuarioData.put("senha", novaSenha);
+			}
+			req.set("usuario", usuarioData);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
+
+	public OperationResult criarTransacao(String token, double valor, String cpfDestino) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "transacao_criar");
+			req.put("token", token);
+			req.put("valor", valor);
+			req.put("cpf_destino", cpfDestino);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
+
+	public OperationResult depositar(String token, double valor) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "depositar");
+			req.put("token", token);
+			req.put("valor_enviado", valor);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
+
+	public TransactionResult lerTransacoes(String token, String dataInicial, String dataFinal) {
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "transacao_ler");
+			req.put("token", token);
+			req.put("data_inicial", dataInicial);
+			req.put("data_final", dataFinal);
+			JsonNode resp = sendRequest(req);
+			boolean status = resp.path("status").asBoolean();
+			String info = resp.path("info").asText();
+			String transacoesJson = null;
+			if (status && resp.has("transacoes")) {
+				transacoesJson = resp.get("transacoes").toString();
+			}
+
+			return new TransactionResult(status, info, transacoesJson);
+		} catch (IOException e) {
+			return new TransactionResult(false, "Erro de comunicação: " + e.getMessage(), null);
+		}
+
+	}
+
 	private static String validateToken(JsonNode req) {
 		String token = req.path("token").asText("");
 		return TokenManager.validateToken(token);
@@ -312,7 +344,7 @@ public class PixClient {
 		// Criar e salvar novo usuário
 		Usuario u = new Usuario(nome, cpf, senha);
 		usuarioDAO.salvar(u);
-		
+
 		return new RespostaBase("usuario_criar", true, "Usuário criado com sucesso");
 	}
 
@@ -349,7 +381,6 @@ public class PixClient {
 
 		boolean removed = TokenManager.removeToken(token);
 
-		
 		if (removed) {
 			return new RespostaBase("usuario_logout", true, "Logout realizado com sucesso");
 		} else {
@@ -376,7 +407,7 @@ public class PixClient {
 		usuarioMap.put("saldo", u.getSaldo());
 		r.setUsuario(usuarioMap);
 		r.getDados().put("usuario", usuarioMap);
-		
+
 		return r;
 
 	}
@@ -430,66 +461,69 @@ public class PixClient {
 	}
 
 	public static RespostaBase opTransacaoLer(JsonNode req) {
-	    String cpf = validateToken(req);
-	    if (cpf == null) {
-	        return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
-	    }
+		String cpf = validateToken(req);
+		if (cpf == null) {
+			return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
+		}
 
-	    // Extrair e validar datas
-	    String dataInicialStr = req.path("data_inicial").asText("").trim();
-	    String dataFinalStr = req.path("data_final").asText("").trim();
+		// Extrair e validar datas
+		String dataInicialStr = req.path("data_inicial").asText("").trim();
+		String dataFinalStr = req.path("data_final").asText("").trim();
 
-	    if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
-	        return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
-	    }
+		if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
+			return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
+		}
 
-	    LocalDateTime dataInicial;
-	    LocalDateTime dataFinal;
-	    try {
-	        // Usar formatter que aceita formato UTC com 'Z'
-	        DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
-	        dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
-	        dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
-	    } catch (Exception e) {
-	        return new RespostaBase("transacao_ler", false, "Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
-	    }
+		LocalDateTime dataInicial;
+		LocalDateTime dataFinal;
+		try {
+			// Usar formatter que aceita formato UTC com 'Z'
+			DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
+			dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
+			dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
+		} catch (Exception e) {
+			return new RespostaBase("transacao_ler", false,
+					"Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
+		}
 
-	    // Buscar transações do usuário no intervalo
-	    List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
+		// Buscar transações do usuário no intervalo
+		List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
 
-	    // Preparar a resposta
-	    RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
-	    List<Map<String, Object>> transacoesList = new ArrayList<>();
+		// Preparar a resposta
+		RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
+		List<Map<String, Object>> transacoesList = new ArrayList<>();
 
-	    for (Transacao t : transacoes) {
-	        Map<String, Object> transacaoMap = new HashMap<>();
+		for (Transacao t : transacoes) {
+			Map<String, Object> transacaoMap = new HashMap<>();
 
-	        transacaoMap.put("id", t.getId());
-	        transacaoMap.put("valor", t.getValor());
+			transacaoMap.put("id", t.getId());
+			transacaoMap.put("valor_enviado", t.getValor());
 
-	        // Buscar usuário enviador
-	        Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
-	        Map<String, String> enviadorMap = new HashMap<>();
-	        enviadorMap.put("cpf", enviador.getCpf());
-	        enviadorMap.put("nome", enviador.getNome());
-	        transacaoMap.put("usuario_enviador", enviadorMap);
+			// Buscar usuário enviador
+			Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
+			Map<String, String> enviadorMap = new HashMap<>();
+			enviadorMap.put("cpf", enviador.getCpf());
+			enviadorMap.put("nome", enviador.getNome());
+			transacaoMap.put("usuario_enviador", enviadorMap);
 
-	        // Buscar usuário recebedor
-	        Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
-	        Map<String, String> recebedorMap = new HashMap<>();
-	        recebedorMap.put("cpf", recebedor.getCpf());
-	        recebedorMap.put("nome", recebedor.getNome());
-	        transacaoMap.put("usuario_recebedor", recebedorMap);
+			// Buscar usuário recebedor
+			Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
+			Map<String, String> recebedorMap = new HashMap<>();
+			recebedorMap.put("cpf", recebedor.getCpf());
+			recebedorMap.put("nome", recebedor.getNome());
+			transacaoMap.put("usuario_recebedor", recebedorMap);
 
-	        // Formatar datas no formato UTC com 'Z'
-	        transacaoMap.put("criado_em", t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
-	        transacaoMap.put("atualizado_em", t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+			// Formatar datas no formato UTC com 'Z'
+			transacaoMap.put("criado_em",
+					t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+			transacaoMap.put("atualizado_em",
+					t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
 
-	        transacoesList.add(transacaoMap);
-	    }
+			transacoesList.add(transacaoMap);
+		}
 
-	    r.setTransacoes(transacoesList);
-	    return r;
+		r.setTransacoes(transacoesList);
+		return r;
 	}
 
 	public static RespostaBase opDepositar(JsonNode req) {
@@ -566,4 +600,3 @@ public class PixClient {
 		return new RespostaBase("usuario_atualizar", true, "Dados atualizados com sucesso");
 	}
 }
-

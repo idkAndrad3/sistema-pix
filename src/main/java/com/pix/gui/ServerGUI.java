@@ -101,6 +101,8 @@ public class ServerGUI extends JFrame {
         clientesTable = new JTable();
     }
 
+ // Local do arquivo: src/main/java/com/pix/gui/ServerGUI.java
+
     private void setupLayout() {
         setLayout(new BorderLayout());
 
@@ -178,10 +180,20 @@ public class ServerGUI extends JFrame {
 
         add(tabbedPane, BorderLayout.CENTER);
 
-        // Panel inferior fixo
+        // ---- INÍCIO DA MODIFICAÇÃO ----
+        // Panel inferior fixo com IP do servidor
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        bottomPanel.add(new JLabel("Banco: sistema_pix | Host: localhost:3306"));
+        String serverIp = "IP não encontrado";
+        try {
+            // Tenta obter o IP da máquina local
+            serverIp = java.net.InetAddress.getLocalHost().getHostAddress();
+        } catch (java.net.UnknownHostException e) {
+            e.printStackTrace(); // Imprime o erro no console
+        }
+        bottomPanel.add(new JLabel("IP do Servidor: " + serverIp));
+        bottomPanel.add(new JLabel(" | Banco: sistema_pix | Host: localhost:3306"));
         add(bottomPanel, BorderLayout.SOUTH);
+        // ---- FIM DA MODIFICAÇÃO ----
     }
 
     private void setupEventHandlers() {

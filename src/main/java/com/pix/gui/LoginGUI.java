@@ -192,15 +192,27 @@ public class LoginGUI extends JFrame {
             client = new PixClient(host, port);
 
             if (client.connect()) {
-                statusLabel.setText("✅ Conectado");
-                statusLabel.setForeground(new Color(0, 180, 0));
-                conectarButton.setText("Desconectar");
-                setFieldsEnabled(true);
+                // ---- INÍCIO DA MODIFICAÇÃO ----
+                // Agora, verificamos a conexão com o protocolo JSON
+                PixClient.OperationResult result = client.verificarConexaoServidor();
 
-                for (ActionListener al : conectarButton.getActionListeners()) {
-                    conectarButton.removeActionListener(al);
+                if (result.isSuccess()) {
+                    statusLabel.setText("✅ Conectado");
+                    statusLabel.setForeground(new Color(0, 180, 0));
+                    conectarButton.setText("Desconectar");
+                    setFieldsEnabled(true);
+
+                    for (ActionListener al : conectarButton.getActionListeners()) {
+                        conectarButton.removeActionListener(al);
+                    }
+                    conectarButton.addActionListener(e -> desconectarServidor());
+                } else {
+                    // Se o protocolo falhar, mostramos o erro e desconectamos
+                    JOptionPane.showMessageDialog(this, "Falha na verificação com o servidor: " + result.getMessage(),
+                            "Erro de Verificação", JOptionPane.ERROR_MESSAGE);
+                    client.disconnect();
                 }
-                conectarButton.addActionListener(e -> desconectarServidor());
+                // ---- FIM DA MODIFICAÇÃO ----
             } else {
                 JOptionPane.showMessageDialog(this, "Erro ao conectar ao servidor!",
                         "Erro de Conexão", JOptionPane.ERROR_MESSAGE);

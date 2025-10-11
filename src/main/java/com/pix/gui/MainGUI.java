@@ -591,7 +591,7 @@ public class MainGUI extends JFrame {
     	                            }
     	
     	                            // --- VALOR ---
-    	                            double valor = transacao.path("valor").asDouble(0.0);
+    	                            double valor = transacao.path("valor_enviado").asDouble(0.0);
     	                            String valorStr = nf.format(valor);
     	
     	                            // --- ORIGEM / DESTINO ---
