@@ -54,6 +54,26 @@ public class UsuarioDAO {
             e.printStackTrace();
         }
     }
+    
+    public boolean deletar(String cpf) {
+        String sql = "DELETE FROM usuarios WHERE cpf = ?";
+
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, cpf);
+            int affectedRows = stmt.executeUpdate();
+
+            if (affectedRows > 0) {
+                System.out.println("[UsuarioDAO] Usuário deletado: " + cpf);
+                return true;
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
 
     public Usuario buscarPorCpf(String cpf) {
         String sql = "SELECT cpf, nome, senha, saldo FROM usuarios WHERE cpf = ?";

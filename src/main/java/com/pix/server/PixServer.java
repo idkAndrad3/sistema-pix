@@ -178,6 +178,10 @@ public class PixServer {
 						resp = PixClient.opUsuarioAtualizar(req);
 						System.out.println(req);
 						break;
+                    case "usuario_deletar":
+                        resp = PixClient.opUsuarioDeletar(req);
+                        System.out.println(req);
+                        break;
 					default:
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
 					}

@@ -261,6 +261,36 @@ public class PixClient {
 			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
 		}
 	}
+	
+	public OperationResult deletarUsuario(String token) {
+        try {
+            ObjectNode req = mapper.createObjectNode();
+            req.put("operacao", "usuario_deletar");
+            req.put("token", token);
+            JsonNode resp = sendRequest(req);
+            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+        } catch (IOException e) {
+            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+        }
+    }
+	
+	// Adicione este método estático na classe PixClient em src/main/java/com/pix/client/PixClient.java
+
+    public static RespostaBase opUsuarioDeletar(JsonNode req) {
+        String cpf = validateToken(req);
+        if (cpf == null) {
+            return new RespostaBase("usuario_deletar", false, "Token inválido ou expirado");
+        }
+
+        boolean deletado = usuarioDAO.deletar(cpf);
+
+        if (deletado) {
+            TokenManager.removeToken(req.path("token").asText("")); // Invalida o token
+            return new RespostaBase("usuario_deletar", true, "Usuário deletado com sucesso.");
+        } else {
+            return new RespostaBase("usuario_deletar", false, "Erro ao deletar usuário.");
+        }
+    }
 
 	public OperationResult criarTransacao(String token, double valor, String cpfDestino) {
 		try {
