@@ -491,71 +491,82 @@ public class PixClient {
 	}
 
 	public static RespostaBase opTransacaoLer(JsonNode req) {
-		String cpf = validateToken(req);
-		if (cpf == null) {
-			return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
-		}
+	    String cpf = validateToken(req);
+	    if (cpf == null) {
+	        return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
+	    }
 
-		// Extrair e validar datas
-		String dataInicialStr = req.path("data_inicial").asText("").trim();
-		String dataFinalStr = req.path("data_final").asText("").trim();
+	    // Extrair e validar datas
+	    String dataInicialStr = req.path("data_inicial").asText("").trim();
+	    String dataFinalStr = req.path("data_final").asText("").trim();
 
-		if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
-			return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
-		}
+	    if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
+	        return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
+	    }
 
-		LocalDateTime dataInicial;
-		LocalDateTime dataFinal;
-		try {
-			// Usar formatter que aceita formato UTC com 'Z'
-			DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
-			dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
-			dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
-		} catch (Exception e) {
-			return new RespostaBase("transacao_ler", false,
-					"Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
-		}
+	    LocalDateTime dataInicial;
+	    LocalDateTime dataFinal;
+	    try {
+	        // Usar formatter que aceita formato UTC com 'Z'
+	        DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
+	        dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
+	        dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
+	    } catch (Exception e) {
+	        return new RespostaBase("transacao_ler", false,
+	                "Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
+	    }
 
-		// Buscar transações do usuário no intervalo
-		List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
+	    // Buscar transações do usuário no intervalo
+	    List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
 
-		// Preparar a resposta
-		RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
-		List<Map<String, Object>> transacoesList = new ArrayList<>();
+	    // Preparar a resposta
+	    RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
+	    List<Map<String, Object>> transacoesList = new ArrayList<>();
 
-		for (Transacao t : transacoes) {
-			Map<String, Object> transacaoMap = new HashMap<>();
+	    for (Transacao t : transacoes) {
+	        Map<String, Object> transacaoMap = new HashMap<>();
 
-			transacaoMap.put("id", t.getId());
-			transacaoMap.put("valor_enviado", t.getValor());
+	        transacaoMap.put("id", t.getId());
+	        transacaoMap.put("valor_enviado", t.getValor());
 
-			// Buscar usuário enviador
-			Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
-			Map<String, String> enviadorMap = new HashMap<>();
-			enviadorMap.put("cpf", enviador.getCpf());
-			enviadorMap.put("nome", enviador.getNome());
-			transacaoMap.put("usuario_enviador", enviadorMap);
+	        // ---- INÍCIO DA CORREÇÃO ----
+	        // Buscar usuário enviador com verificação de nulo
+	        Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
+	        Map<String, String> enviadorMap = new HashMap<>();
+	        if (enviador != null) {
+	            enviadorMap.put("cpf", enviador.getCpf());
+	            enviadorMap.put("nome", enviador.getNome());
+	        } else {
+	            enviadorMap.put("cpf", t.getCpfOrigem());
+	            enviadorMap.put("nome", "Usuário Deletado"); // Fallback
+	        }
+	        transacaoMap.put("usuario_enviador", enviadorMap);
 
-			// Buscar usuário recebedor
-			Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
-			Map<String, String> recebedorMap = new HashMap<>();
-			recebedorMap.put("cpf", recebedor.getCpf());
-			recebedorMap.put("nome", recebedor.getNome());
-			transacaoMap.put("usuario_recebedor", recebedorMap);
+	        // Buscar usuário recebedor com verificação de nulo
+	        Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
+	        Map<String, String> recebedorMap = new HashMap<>();
+	        if (recebedor != null) {
+	            recebedorMap.put("cpf", recebedor.getCpf());
+	            recebedorMap.put("nome", recebedor.getNome());
+	        } else {
+	            recebedorMap.put("cpf", t.getCpfDestino());
+	            recebedorMap.put("nome", "Usuário Deletado"); // Fallback
+	        }
+	        transacaoMap.put("usuario_recebedor", recebedorMap);
+	        // ---- FIM DA CORREÇÃO ----
 
-			// Formatar datas no formato UTC com 'Z'
-			transacaoMap.put("criado_em",
-					t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
-			transacaoMap.put("atualizado_em",
-					t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+	        // Formatar datas no formato UTC com 'Z'
+	        transacaoMap.put("criado_em",
+	                t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+	        transacaoMap.put("atualizado_em",
+	                t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
 
-			transacoesList.add(transacaoMap);
-		}
+	        transacoesList.add(transacaoMap);
+	    }
 
-		r.setTransacoes(transacoesList);
-		return r;
+	    r.setTransacoes(transacoesList);
+	    return r;
 	}
-
 	public static RespostaBase opDepositar(JsonNode req) {
 		String cpf = validateToken(req);
 		if (cpf == null) {

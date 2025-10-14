@@ -252,7 +252,12 @@ public class ServerGUI extends JFrame {
                 JOptionPane.showMessageDialog(this, "Porta inválida");
                 return;
             }
-            server = new com.pix.server.PixServer(port);
+            
+            // ---- INÍCIO DA MODIFICAÇÃO ----
+            // Passa o método appendLog como o logger para o servidor
+            server = new com.pix.server.PixServer(port, this::appendLog);
+            // ---- FIM DA MODIFICAÇÃO ----
+
             Thread t = new Thread(() -> {
                 try {
                     server.start();
@@ -269,10 +274,11 @@ public class ServerGUI extends JFrame {
             statusLabel.setText("Status: Rodando");
             statusLabel.setForeground(Color.GREEN);
 
-            appendLog("Servidor iniciado na porta " + port);
+            // A mensagem de log de início agora será enviada pelo próprio servidor
+            // appendLog("Servidor iniciado na porta " + port); 
             appendLog("Conectado ao banco de dados MySQL");
             appendLog("Aguardando conexões de clientes...");
-            // atualiza tabelas iniciais
+            
             refreshUsuarios();
             refreshTransacoes();
             refreshClientes();

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +28,7 @@ import validador.Validator;
  * armazenamento em memória por persistência no banco.
  */
 public class PixServer {
+	
 	private static int port;
 	private ServerSocket serverSocket;
 	private boolean running = false;
@@ -38,9 +40,11 @@ public class PixServer {
 	private final AtomicInteger activeConnections = new AtomicInteger(0);
 	private final AtomicLong sessionIdCounter = new AtomicLong(1);
 	private final ConcurrentHashMap<Long, Sessao> sessions = new ConcurrentHashMap<>();
+	private final Consumer<String> logger;
 
-	public PixServer(int port) {
+	public PixServer(int port, Consumer<String> logger) {
 		PixServer.port = port;
+		this.logger = logger; // Armazena o logger recebido
 	}
 
 	public static int getPort() {
@@ -65,7 +69,7 @@ public class PixServer {
 		running = true;
 
 		serverThread = new Thread(() -> {
-			System.out.println("Servidor Pix com BD rodando na porta " + port);
+			logger.accept("Servidor Pix com BD rodando na porta " + port);
 			while (running) {
 				try {
 					Socket clientSocket = serverSocket.accept();
@@ -101,7 +105,7 @@ public class PixServer {
 
 				} catch (IOException e) {
 					if (running) {
-						System.err.println("Erro no servidor: " + e.getMessage());
+						logger.accept("Erro no servidor: " + e.getMessage());
 					}
 				}
 			}
@@ -121,13 +125,14 @@ public class PixServer {
 
 	private void handleClient(Socket socket) {
 		String remote = socket.getRemoteSocketAddress().toString();
-		System.out.println("Cliente conectado: " + remote);
+		logger.accept("Cliente conectado: " + remote);
 
 		try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
 			String inputLine;
 			while ((inputLine = in.readLine()) != null) {
+				 logger.accept("[RECEBIDO] de " + remote + ": " + inputLine);
 				try {
 					JsonNode req = mapper.readTree(inputLine);
 					String operacao = req.path("operacao").asText("");
@@ -135,6 +140,7 @@ public class PixServer {
 					if ("conectar".equals(operacao)) {
 	                    RespostaBase resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso.");
 	                    String jsonResp = mapper.writeValueAsString(resp);
+	                    logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
 	                    out.println(jsonResp);
 	                    continue; // Pula para a próxima iteração do loop, ignorando o resto do código
 	                }
@@ -186,6 +192,7 @@ public class PixServer {
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
 					}
 					String jsonResp = mapper.writeValueAsString(resp);
+					logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
 					Validator.validateServer(jsonResp);
 
 					out.println(jsonResp);
@@ -193,12 +200,16 @@ public class PixServer {
 				} catch (Exception e) {
 					RespostaBase erro = new RespostaBase("erro", false, "Erro no processamento: " + e.getMessage());
 					try {
-						out.println(mapper.writeValueAsString(erro));
+						
+						String jsonErro = mapper.writeValueAsString(erro);
+                        // Log do JSON de erro enviado
+                        logger.accept("[ENVIANDO ERRO] para " + remote + ": " + jsonErro);
+						
 					} catch (Exception ignore) {}
 				}
 			}
 		} catch (IOException e) {
-			System.out.println("Cliente desconectado: " + remote);
+			logger.accept("Cliente desconectado: " + remote);
 		} finally {
 			try {
 				socket.close();
