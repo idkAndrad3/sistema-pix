@@ -1,0 +1,4 @@
+1. Pré-requisitos
+Java (versão 11 ou superior)
+Maven
+Git

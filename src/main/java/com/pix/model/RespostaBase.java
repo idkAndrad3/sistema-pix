@@ -3,6 +3,10 @@ package com.pix.model;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+// A anotação abaixo garante que campos nulos ou vazios não serão incluídos no JSON final.
+@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 public class RespostaBase {
 	private String operacao;
 	private boolean status;
@@ -77,20 +81,4 @@ public class RespostaBase {
 		this.dados = dados;
 	}
 
-	// Métodos de compatibilidade com código existente
-	public boolean isSucesso() {
-		return status;
-	}
-
-	public void setSucesso(boolean sucesso) {
-		this.status = sucesso;
-	}
-
-	public String getMensagem() {
-		return info;
-	}
-
-	public void setMensagem(String mensagem) {
-		this.info = mensagem;
-	}
 }

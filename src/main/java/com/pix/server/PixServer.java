@@ -142,7 +142,7 @@ public class PixServer {
 	                    String jsonResp = mapper.writeValueAsString(resp);
 	                    logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
 	                    out.println(jsonResp);
-	                    continue; // Pula para a próxima iteração do loop, ignorando o resto do código
+	                    continue;
 	                }
 					Validator.validateClient(inputLine);
 
