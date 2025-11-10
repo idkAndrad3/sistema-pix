@@ -78,6 +78,8 @@ public class MainGUI extends JFrame {
 	// Novos componentes para depósito
 	private JFormattedTextField valorDepositoField;
 	private JButton depositoButton;
+	private JTextField dataInicialField;
+	private JTextField dataFinalField;
 
 	private DecimalFormat currencyFormat = new DecimalFormat("R$ #,##0.00");
 
@@ -317,15 +319,43 @@ public class MainGUI extends JFrame {
 	}
 
 	private JPanel createExtratoPanel() {
-		JPanel panel = new JPanel(new BorderLayout());
+		JPanel panel = new JPanel(new BorderLayout(5, 5)); // Adiciona espaçamento
 
+		// --- (NOVO) Painel de Filtros (Norte) ---
+		JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		filterPanel.setBorder(BorderFactory.createTitledBorder("Filtros de Período"));
+
+		// Inicializa os campos (eles agora são variáveis de instância)
+		dataInicialField = new JTextField("2025-01-01T00:00:00Z", 20);
+		dataFinalField = new JTextField(
+				Instant.now().atZone(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")),
+				20);
+
+		filterPanel.add(new JLabel("Data Inicial:"));
+		filterPanel.add(dataInicialField);
+		filterPanel.add(new JLabel("Data Final:"));
+		filterPanel.add(dataFinalField);
+
+		// Adiciona um rótulo de ajuda
+		JLabel formatLabel = new JLabel("Formato: yyyy-MM-dd'T'HH:mm:ss'Z' (UTC)");
+		formatLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+		formatLabel.setForeground(Color.GRAY);
+
+		JPanel northPanel = new JPanel(new BorderLayout());
+		northPanel.add(filterPanel, BorderLayout.NORTH);
+		northPanel.add(formatLabel, BorderLayout.CENTER);
+
+		panel.add(northPanel, BorderLayout.NORTH);
+		// --- Fim do novo painel ---
+
+		// --- (EXISTENTE) Tabela (Centro) ---
 		JScrollPane scrollPane = new JScrollPane(extratoTable);
 		scrollPane.setPreferredSize(new Dimension(800, 300));
-
 		panel.add(scrollPane, BorderLayout.CENTER);
 
+		// --- (EXISTENTE) Botão (Sul) ---
 		JPanel buttonPanel = new JPanel(new FlowLayout());
-		JButton refreshButton = new JButton("Atualizar");
+		JButton refreshButton = new JButton("Atualizar Extrato"); // Renomeado para clareza
 		refreshButton.addActionListener(e -> carregarExtrato());
 		buttonPanel.add(refreshButton);
 
@@ -549,6 +579,18 @@ public class MainGUI extends JFrame {
 			return;
 		}
 
+		// (MODIFICADO) Obter datas dos campos da UI (deve ser feito antes do SwingWorker)
+		String dataInicialStr = dataInicialField.getText().trim();
+		String dataFinalStr = dataFinalField.getText().trim();
+
+		// Validação simples
+		if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
+			JOptionPane.showMessageDialog(this, "Data Inicial e Data Final são obrigatórias!", "Erro de Filtro",
+					JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+		// Você pode adicionar uma validação de regex mais forte aqui se desejar
+
 		setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR));
 
 		SwingWorker<Void, Void> worker = new SwingWorker<>() {
@@ -556,15 +598,12 @@ public class MainGUI extends JFrame {
 
 			@Override
 			protected Void doInBackground() throws Exception {
-				Instant dataFinal = Instant.now();
-				Instant dataInicial = dataFinal.minus(30, ChronoUnit.DAYS);
+				// (REMOVIDO) A lógica de 30 dias foi removida
+				// Instant dataFinal = Instant.now();
+				// Instant dataInicial = dataFinal.minus(30, ChronoUnit.DAYS);
+				// ...
 
-				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
-						.withZone(ZoneOffset.UTC);
-
-				String dataInicialStr = formatter.format(dataInicial);
-				String dataFinalStr = formatter.format(dataFinal);
-
+				// (MODIFICADO) Usa as strings obtidas dos campos de texto
 				result = client.lerTransacoes(token, dataInicialStr, dataFinalStr);
 				return null;
 			}

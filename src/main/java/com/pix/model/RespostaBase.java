@@ -1,17 +1,17 @@
 package com.pix.model;
 
-import java.util.HashMap;
+
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 // A anotação abaixo garante que campos nulos ou vazios não serão incluídos no JSON final.
-@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RespostaBase {
 	private String operacao;
 	private boolean status;
 	private String info;
-	private Map<String, Object> dados = new HashMap<>();
+	private Map<String, Object> dados;
 	private Object usuario;
 	private java.util.List<java.util.Map<String, Object>> transacoes;
 	private String token;

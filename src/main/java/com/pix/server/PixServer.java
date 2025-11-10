@@ -28,7 +28,7 @@ import validador.Validator;
  * armazenamento em memória por persistência no banco.
  */
 public class PixServer {
-	
+
 	private static int port;
 	private ServerSocket serverSocket;
 	private boolean running = false;
@@ -77,11 +77,8 @@ public class PixServer {
 					// registra sessão
 					long sessionId = sessionIdCounter.getAndIncrement();
 					activeConnections.incrementAndGet();
-					Sessao sess = new Sessao(sessionId,
-							clientSocket.getInetAddress().getHostAddress(),
-							clientSocket.getPort(),
-							clientSocket.getInetAddress().getHostName(),
-							"Conectado",
+					Sessao sess = new Sessao(sessionId, clientSocket.getInetAddress().getHostAddress(),
+							clientSocket.getPort(), clientSocket.getInetAddress().getHostName(), "Conectado",
 							LocalDateTime.now());
 					sessions.put(sessionId, sess);
 
@@ -99,7 +96,8 @@ public class PixServer {
 							}
 							try {
 								clientSocket.close();
-							} catch (IOException ignored) {}
+							} catch (IOException ignored) {
+							}
 						}
 					}, "PixClient-" + sessionId).start();
 
@@ -127,31 +125,37 @@ public class PixServer {
 		String remote = socket.getRemoteSocketAddress().toString();
 		logger.accept("Cliente conectado: " + remote);
 
+		boolean isConnected = false;
+
 		try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
 			String inputLine;
 			while ((inputLine = in.readLine()) != null) {
-				 logger.accept("[RECEBIDO] de " + remote + ": " + inputLine);
+				logger.accept("[RECEBIDO] de " + remote + ": " + inputLine);
 				try {
 					JsonNode req = mapper.readTree(inputLine);
 					String operacao = req.path("operacao").asText("");
 
 					if ("conectar".equals(operacao)) {
-	                    RespostaBase resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso.");
-	                    String jsonResp = mapper.writeValueAsString(resp);
-	                    logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
-	                    out.println(jsonResp);
-	                    continue;
-	                }
+						isConnected = true;
+						RespostaBase resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso.");
+						String jsonResp = mapper.writeValueAsString(resp);
+						logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
+						out.println(jsonResp);
+						continue;
+					}
+					if (!isConnected) {
+						RespostaBase resp = new RespostaBase(operacao, false,
+								"Erro, para receber uma operacao, a primeira operacao deve ser 'conectar'");
+						out.println(mapper.writeValueAsString(resp));
+						continue; // Não desconecta, mas força o cliente a enviar 'conectar'
+					}
 					Validator.validateClient(inputLine);
 
 					RespostaBase resp;
 					switch (operacao) {
-					case "conectar":
-						resp = new RespostaBase("conectar", true, "Servidor conectado com sucesso");
-						System.out.println(req);
-						break;
+
 					case "usuario_criar":
 						resp = PixClient.opUsuarioCriar(req);
 						System.out.println(req);
@@ -184,10 +188,13 @@ public class PixServer {
 						resp = PixClient.opUsuarioAtualizar(req);
 						System.out.println(req);
 						break;
-                    case "usuario_deletar":
-                        resp = PixClient.opUsuarioDeletar(req);
-                        System.out.println(req);
-                        break;
+					case "usuario_deletar":
+						resp = PixClient.opUsuarioDeletar(req);
+						System.out.println(req);
+						break;
+					case "erro_servidor":
+                        logger.accept("[ERRO REPORTADO PELO CLIENTE] " + inputLine);
+                        continue;
 					default:
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
 					}
@@ -198,14 +205,24 @@ public class PixServer {
 					out.println(jsonResp);
 
 				} catch (Exception e) {
+					// [CRITICAL] [ISSUE-007] Implementação da regra 5.2. Se a validação falhar por
+					// 'operacao' ausente, a conexão deve ser encerrada (retornando null), não
+					// respondida.
+					// Protocolo (5.2) - Erros de JSON (como campo 'operacao' faltando) devem
+					// desconectar.
+					if (e.getMessage().contains("O campo obrigatório 'operacao'")) {
+						return; // Retorna null (fecha a conexão via try-with-resources)
+					}
+
 					RespostaBase erro = new RespostaBase("erro", false, "Erro no processamento: " + e.getMessage());
 					try {
-						
+
 						String jsonErro = mapper.writeValueAsString(erro);
-                        // Log do JSON de erro enviado
-                        logger.accept("[ENVIANDO ERRO] para " + remote + ": " + jsonErro);
-						
-					} catch (Exception ignore) {}
+						// Log do JSON de erro enviado
+						logger.accept("[ENVIANDO ERRO] para " + remote + ": " + jsonErro);
+
+					} catch (Exception ignore) {
+					}
 				}
 			}
 		} catch (IOException e) {

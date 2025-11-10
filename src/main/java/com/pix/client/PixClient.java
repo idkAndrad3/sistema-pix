@@ -75,13 +75,52 @@ public class PixClient {
 	}
 
 	private JsonNode sendRequest(ObjectNode request) throws IOException {
-		out.println(mapper.writeValueAsString(request));
-		String responseStr = in.readLine();
-		if (responseStr == null) {
-			throw new IOException("Conexão encerrada pelo servidor.");
-		}
-		return mapper.readTree(responseStr);
-	}
+        try {
+            // 1. Envia a requisição
+            if (out == null) {
+                 throw new IOException("Cliente não está conectado (PrintWriter nulo).");
+            }
+            out.println(mapper.writeValueAsString(request));
+
+            // 2. Lê a resposta
+            if (in == null) {
+                throw new IOException("Cliente não está conectado (BufferedReader nulo).");
+            }
+            String responseStr = in.readLine();
+
+            // 3. Verifica se a conexão foi fechada (Regra 5.2 e 7.3)
+            if (responseStr == null) {
+                // O servidor encerrou a conexão ativamente (ex: timeout ou erro)
+                disconnect(); // <--- CORREÇÃO: Desconectar ativamente
+                throw new IOException("Conexão encerrada pelo servidor.");
+            }
+
+            // 4. Tenta parsear o JSON (Regra 5.2)
+            JsonNode responseNode = mapper.readTree(responseStr);
+
+            // 5. Validação mínima (Regra 5.2)
+            // Se os campos base do protocolo não existirem, a resposta é inválida.
+            if (responseNode == null || 
+                responseNode.path("operacao").isMissingNode() || 
+                responseNode.path("status").isMissingNode() ||
+                responseNode.path("info").isMissingNode()) 
+            {
+                disconnect(); // <--- CORREÇÃO: Desconectar
+                throw new IOException("Resposta inválida do servidor (faltando campos do protocolo). Conexão encerrada.");
+            }
+
+            return responseNode;
+
+        } catch (IOException e) { // Captura SocketException, JsonProcessingException, etc.
+            // 6. Captura QUALQUER erro de IO ou Parsing (Regra 5.2)
+            // Se não conseguirmos ler ou parsear, a conexão não é confiável.
+            
+            disconnect(); // <--- CORREÇÃO: Desconectar
+            
+            // 7. Propaga o erro para que os métodos (login, lerUsuario) parem
+            throw new IOException("Erro crítico de comunicação ou JSON inválido: " + e.getMessage(), e);
+        }
+    }
 
 	// --- Classes de Resultado --- //
 
@@ -182,9 +221,7 @@ public class PixClient {
 			String token = null;
 			if (status) {
 				// tenta primeiro em dados.token, se não existir tenta token no root
-				if (resp.path("dados").has("token") && !resp.path("dados").path("token").asText().isEmpty()) {
-					token = resp.path("dados").path("token").asText();
-				} else if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
+				if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
 					token = resp.path("token").asText();
 				} else {
 					token = null;
@@ -398,7 +435,6 @@ public class PixClient {
 		String token = TokenManager.generateToken(cpf);
 		RespostaBase r = new RespostaBase("usuario_login", true, "Login bem-sucedido");
 		r.setToken(token);
-		r.getDados().put("token", token);
 		return r;
 	}
 
@@ -436,7 +472,7 @@ public class PixClient {
 		usuarioMap.put("cpf", u.getCpf());
 		usuarioMap.put("saldo", u.getSaldo());
 		r.setUsuario(usuarioMap);
-		r.getDados().put("usuario", usuarioMap);
+		
 
 		return r;
 
@@ -468,6 +504,7 @@ public class PixClient {
 		if (origem == null) {
 			return new RespostaBase("transacao_criar", false, "Usuário de origem não encontrado");
 		}
+		
 
 		if (origem.getSaldo() < valor) {
 			return new RespostaBase("transacao_criar", false, "Saldo insuficiente");
@@ -484,9 +521,6 @@ public class PixClient {
 		transacaoDAO.salvar(t);
 
 		RespostaBase r = new RespostaBase("transacao_criar", true, "Transação realizada com sucesso");
-		r.getDados().put("id", t.getId());
-		r.getDados().put("valor", valor);
-		r.getDados().put("data_hora", t.getCriadoEm().format(dtf));
 		return r;
 	}
 
@@ -495,7 +529,7 @@ public class PixClient {
 	    if (cpf == null) {
 	        return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
 	    }
-
+	    
 	    // Extrair e validar datas
 	    String dataInicialStr = req.path("data_inicial").asText("").trim();
 	    String dataFinalStr = req.path("data_final").asText("").trim();
@@ -515,6 +549,9 @@ public class PixClient {
 	        return new RespostaBase("transacao_ler", false,
 	                "Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
 	    }
+	    if (dataInicial.plusDays(31).isBefore(dataFinal)) {
+	    		        return new RespostaBase("transacao_ler", false, "O período de consulta não pode exceder 31 dias.");
+	    		    }
 
 	    // Buscar transações do usuário no intervalo
 	    List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
@@ -584,13 +621,13 @@ public class PixClient {
 		if (u == null) {
 			return new RespostaBase("depositar", false, "Usuário não encontrado");
 		}
-
+		Transacao t = new Transacao(cpf, cpf, valor);
+		transacaoDAO.salvar(t);
 		// Atualizar saldo
 		u.addSaldo(valor);
 		usuarioDAO.atualizar(u);
 
 		RespostaBase r = new RespostaBase("depositar", true, "Depósito realizado com sucesso");
-		r.getDados().put("novo_saldo", u.getSaldo());
 		return r;
 	}
 
