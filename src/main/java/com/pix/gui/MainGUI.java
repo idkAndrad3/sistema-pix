@@ -63,8 +63,8 @@ public class MainGUI extends JFrame {
 	private JLabel nomeLabel;
 	private JLabel cpfLabel;
 	private JLabel saldoLabel;
-	private JFormattedTextField valorPixField; // campo de moeda (com DocumentFilter)
-	private JFormattedTextField cpfDestinoField; // campo CPF com máscara
+	private JFormattedTextField valorPixField;
+	private JFormattedTextField cpfDestinoField;
 	private JButton pixButton;
 	private JButton atualizarButton;
 	private JButton logoutButton;
@@ -87,7 +87,7 @@ public class MainGUI extends JFrame {
 		this.client = client;
 		this.token = token;
 
-		// ---- aplica FlatLaf antes de construir a UI ----
+		// ---- aplica FlatLaf ----
 		try {
 			FlatLightLaf.setup();
 		} catch (Exception ex) {
@@ -321,12 +321,13 @@ public class MainGUI extends JFrame {
 	private JPanel createExtratoPanel() {
 		JPanel panel = new JPanel(new BorderLayout(5, 5)); // Adiciona espaçamento
 
-		// --- (NOVO) Painel de Filtros (Norte) ---
 		JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		filterPanel.setBorder(BorderFactory.createTitledBorder("Filtros de Período"));
 
 		// Inicializa os campos (eles agora são variáveis de instância)
-		dataInicialField = new JTextField("2025-01-01T00:00:00Z", 20);
+		dataInicialField = new JTextField(
+				Instant.now().atZone(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")),
+				20);
 		dataFinalField = new JTextField(
 				Instant.now().atZone(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")),
 				20);
@@ -355,7 +356,7 @@ public class MainGUI extends JFrame {
 
 		// --- (EXISTENTE) Botão (Sul) ---
 		JPanel buttonPanel = new JPanel(new FlowLayout());
-		JButton refreshButton = new JButton("Atualizar Extrato"); // Renomeado para clareza
+		JButton refreshButton = new JButton("Atualizar Extrato");
 		refreshButton.addActionListener(e -> carregarExtrato());
 		buttonPanel.add(refreshButton);
 
@@ -391,8 +392,8 @@ public class MainGUI extends JFrame {
 		panel.add(atualizarButton, gbc);
 
 		// Botão Deletar
-		gbc.gridy = 4; // Ajuste o gridy para a próxima linha
-		gbc.insets = new Insets(20, 10, 10, 10); // Adiciona um espaço extra acima
+		gbc.gridy = 4;
+		gbc.insets = new Insets(20, 10, 10, 10);
 		panel.add(deletarButton, gbc);
 
 		// Aviso
@@ -565,7 +566,7 @@ public class MainGUI extends JFrame {
 					JOptionPane.INFORMATION_MESSAGE);
 			novoNomeField.setText("");
 			novaSenhaField.setText("");
-			carregarDadosUsuario(); // Atualizar dados exibidos
+			carregarDadosUsuario();
 		} else {
 			JOptionPane.showMessageDialog(this, result.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
 		}
@@ -579,7 +580,6 @@ public class MainGUI extends JFrame {
 			return;
 		}
 
-		// (MODIFICADO) Obter datas dos campos da UI (deve ser feito antes do SwingWorker)
 		String dataInicialStr = dataInicialField.getText().trim();
 		String dataFinalStr = dataFinalField.getText().trim();
 
@@ -589,7 +589,6 @@ public class MainGUI extends JFrame {
 					JOptionPane.ERROR_MESSAGE);
 			return;
 		}
-		// Você pode adicionar uma validação de regex mais forte aqui se desejar
 
 		setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR));
 
@@ -598,12 +597,7 @@ public class MainGUI extends JFrame {
 
 			@Override
 			protected Void doInBackground() throws Exception {
-				// (REMOVIDO) A lógica de 30 dias foi removida
-				// Instant dataFinal = Instant.now();
-				// Instant dataInicial = dataFinal.minus(30, ChronoUnit.DAYS);
-				// ...
 
-				// (MODIFICADO) Usa as strings obtidas dos campos de texto
 				result = client.lerTransacoes(token, dataInicialStr, dataFinalStr);
 				return null;
 			}
@@ -613,15 +607,14 @@ public class MainGUI extends JFrame {
 				try {
 					if (result != null && result.isSuccess() && result.getTransacoes() != null) {
 						JsonNode transacoes = MAPPER.readTree(result.getTransacoes());
-						// limpar tabela (observar que updates na UI devem ocorrer no EDT; done() já
-						// roda no EDT)
+
 						tableModel.setRowCount(0);
 
 						NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 						DateTimeFormatter displayFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
 						for (JsonNode transacao : transacoes) {
-							// --- DATA: aceita 'criado_em' (velho) ou 'data_hora' (novo) ---
+
 							String dataRaw = "";
 							if (!transacao.path("criado_em").isMissingNode()
 									&& !transacao.path("criado_em").asText().isEmpty()) {

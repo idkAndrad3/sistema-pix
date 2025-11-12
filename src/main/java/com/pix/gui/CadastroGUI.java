@@ -37,7 +37,6 @@ public class CadastroGUI extends JDialog {
     }
 
     private void initializeComponents() {
-        // CPF com máscara
         try {
             MaskFormatter cpfMask = new MaskFormatter("###.###.###-##");
             cpfMask.setPlaceholderCharacter('_');

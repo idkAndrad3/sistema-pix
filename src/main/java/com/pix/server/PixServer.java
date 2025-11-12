@@ -36,7 +36,6 @@ public class PixServer {
 
 	private static final ObjectMapper mapper = new ObjectMapper();
 
-	/* tracking de conexões/sessões para a GUI */
 	private final AtomicInteger activeConnections = new AtomicInteger(0);
 	private final AtomicLong sessionIdCounter = new AtomicLong(1);
 	private final ConcurrentHashMap<Long, Sessao> sessions = new ConcurrentHashMap<>();
@@ -44,19 +43,17 @@ public class PixServer {
 
 	public PixServer(int port, Consumer<String> logger) {
 		PixServer.port = port;
-		this.logger = logger; // Armazena o logger recebido
+		this.logger = logger;
 	}
 
 	public static int getPort() {
 		return port;
 	}
 
-	/** Retorna número atual de conexões ativas */
 	public int getActiveConnections() {
 		return activeConnections.get();
 	}
 
-	/** Retorna snapshot da lista de sessões/clients */
 	public List<Sessao> getClientes() {
 		return new ArrayList<>(sessions.values());
 	}
@@ -74,7 +71,6 @@ public class PixServer {
 				try {
 					Socket clientSocket = serverSocket.accept();
 
-					// registra sessão
 					long sessionId = sessionIdCounter.getAndIncrement();
 					activeConnections.incrementAndGet();
 					Sessao sess = new Sessao(sessionId, clientSocket.getInetAddress().getHostAddress(),
@@ -84,10 +80,10 @@ public class PixServer {
 
 					new Thread(() -> {
 						try {
-							// mantém assinatura original do handleClient
+
 							handleClient(clientSocket);
 						} finally {
-							// ao finalizar a conexão, atualiza contadores e sessão
+
 							activeConnections.decrementAndGet();
 							Sessao s = sessions.get(sessionId);
 							if (s != null) {
@@ -127,15 +123,18 @@ public class PixServer {
 
 		boolean isConnected = false;
 
-		try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+		try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
 			String inputLine;
 			while ((inputLine = in.readLine()) != null) {
 				logger.accept("[RECEBIDO] de " + remote + ": " + inputLine);
+
+				String operacao = "desconhecida";
+
 				try {
 					JsonNode req = mapper.readTree(inputLine);
-					String operacao = req.path("operacao").asText("");
+					operacao = req.path("operacao").asText("desconhecida");
 
 					if ("conectar".equals(operacao)) {
 						isConnected = true;
@@ -145,17 +144,19 @@ public class PixServer {
 						out.println(jsonResp);
 						continue;
 					}
+
 					if (!isConnected) {
+
 						RespostaBase resp = new RespostaBase(operacao, false,
 								"Erro, para receber uma operacao, a primeira operacao deve ser 'conectar'");
 						out.println(mapper.writeValueAsString(resp));
-						continue; // Não desconecta, mas força o cliente a enviar 'conectar'
+						continue;
 					}
+
 					Validator.validateClient(inputLine);
 
 					RespostaBase resp;
 					switch (operacao) {
-
 					case "usuario_criar":
 						resp = PixClient.opUsuarioCriar(req);
 						System.out.println(req);
@@ -193,39 +194,33 @@ public class PixServer {
 						System.out.println(req);
 						break;
 					case "erro_servidor":
-                        logger.accept("[ERRO REPORTADO PELO CLIENTE] " + inputLine);
-                        continue;
+						logger.accept("[ERRO REPORTADO PELO CLIENTE] " + inputLine);
+						continue;
 					default:
 						resp = new RespostaBase(operacao, false, "Operação desconhecida");
 					}
+
 					String jsonResp = mapper.writeValueAsString(resp);
 					logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
 					Validator.validateServer(jsonResp);
-
 					out.println(jsonResp);
 
 				} catch (Exception e) {
-					// [CRITICAL] [ISSUE-007] Implementação da regra 5.2. Se a validação falhar por
-					// 'operacao' ausente, a conexão deve ser encerrada (retornando null), não
-					// respondida.
-					// Protocolo (5.2) - Erros de JSON (como campo 'operacao' faltando) devem
-					// desconectar.
+
 					if (e.getMessage().contains("O campo obrigatório 'operacao'")) {
-						return; // Retorna null (fecha a conexão via try-with-resources)
+						return;
 					}
 
-					RespostaBase erro = new RespostaBase("erro", false, "Erro no processamento: " + e.getMessage());
-					try {
+					RespostaBase erro = new RespostaBase(operacao, false, "Erro no processamento: " + e.getMessage());
 
-						String jsonErro = mapper.writeValueAsString(erro);
-						// Log do JSON de erro enviado
-						logger.accept("[ENVIANDO ERRO] para " + remote + ": " + jsonErro);
+					String jsonErro = mapper.writeValueAsString(erro);
+					logger.accept("[ENVIANDO ERRO] para " + remote + ": " + jsonErro);
+					out.println(jsonErro);
 
-					} catch (Exception ignore) {
-					}
 				}
 			}
 		} catch (IOException e) {
+
 			logger.accept("Cliente desconectado: " + remote);
 		} finally {
 			try {

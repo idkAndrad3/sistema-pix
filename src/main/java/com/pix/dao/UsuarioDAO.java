@@ -7,164 +7,161 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO para persistência de Usuario.
- * Observação: o campo 'cpf' é tratado como chave primária natural.
+ * DAO para persistência de Usuario. Observação: o campo 'cpf' é tratado como
+ * chave primária natural.
  */
 public class UsuarioDAO {
 
-    public void salvar(Usuario usuario) {
-        String sql = "INSERT INTO usuarios (cpf, nome, senha, saldo) VALUES (?, ?, ?, ?)";
+	public void salvar(Usuario usuario) {
+		String sql = "INSERT INTO usuarios (cpf, nome, senha, saldo) VALUES (?, ?, ?, ?)";
 
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, usuario.getCpf());
-            stmt.setString(2, usuario.getNome());
-            stmt.setString(3, usuario.getSenha());
-            stmt.setDouble(4, usuario.getSaldo());
-            stmt.executeUpdate();
+			stmt.setString(1, usuario.getCpf());
+			stmt.setString(2, usuario.getNome());
+			stmt.setString(3, usuario.getSenha());
+			stmt.setDouble(4, usuario.getSaldo());
+			stmt.executeUpdate();
 
-            System.out.println("[UsuarioDAO] Usuário salvo: " + usuario.getCpf());
+			System.out.println("[UsuarioDAO] Usuário salvo: " + usuario.getCpf());
 
-        } catch (SQLException e) {
-            if (e.getErrorCode() == 1062) { // duplicate entry
-                System.out.println("[UsuarioDAO] CPF já existe, tentando atualizar...");
-                atualizar(usuario);
-            } else {
-                e.printStackTrace();
-            }
-        }
-    }
+		} catch (SQLException e) {
+			if (e.getErrorCode() == 1062) { // duplicate entry
+				System.out.println("[UsuarioDAO] CPF já existe, tentando atualizar...");
+				atualizar(usuario);
+			} else {
+				e.printStackTrace();
+			}
+		}
+	}
 
-    public void atualizar(Usuario usuario) {
-        String sql = "UPDATE usuarios SET nome = ?, senha = ?, saldo = ? WHERE cpf = ?";
+	public void atualizar(Usuario usuario) {
+		String sql = "UPDATE usuarios SET nome = ?, senha = ?, saldo = ? WHERE cpf = ?";
 
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, usuario.getNome());
-            stmt.setString(2, usuario.getSenha());
-            stmt.setDouble(3, usuario.getSaldo());
-            stmt.setString(4, usuario.getCpf());
-            stmt.executeUpdate();
+			stmt.setString(1, usuario.getNome());
+			stmt.setString(2, usuario.getSenha());
+			stmt.setDouble(3, usuario.getSaldo());
+			stmt.setString(4, usuario.getCpf());
+			stmt.executeUpdate();
 
-            System.out.println("[UsuarioDAO] Usuário atualizado: " + usuario.getCpf());
+			System.out.println("[UsuarioDAO] Usuário atualizado: " + usuario.getCpf());
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-    
-    public boolean deletar(String cpf) {
-        String sql = "DELETE FROM usuarios WHERE cpf = ?";
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
 
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+	public boolean deletar(String cpf) {
+		String sql = "DELETE FROM usuarios WHERE cpf = ?";
 
-            stmt.setString(1, cpf);
-            int affectedRows = stmt.executeUpdate();
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            if (affectedRows > 0) {
-                System.out.println("[UsuarioDAO] Usuário deletado: " + cpf);
-                return true;
-            }
+			stmt.setString(1, cpf);
+			int affectedRows = stmt.executeUpdate();
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
+			if (affectedRows > 0) {
+				System.out.println("[UsuarioDAO] Usuário deletado: " + cpf);
+				return true;
+			}
 
-    public Usuario buscarPorCpf(String cpf) {
-        String sql = "SELECT cpf, nome, senha, saldo FROM usuarios WHERE cpf = ?";
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
 
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+	public Usuario buscarPorCpf(String cpf) {
+		String sql = "SELECT cpf, nome, senha, saldo FROM usuarios WHERE cpf = ?";
 
-            stmt.setString(1, cpf);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String nome = rs.getString("nome");
-                    String senha = rs.getString("senha");
-                    double saldo = rs.getDouble("saldo");
-                    Usuario u = new Usuario(nome, cpf, senha);
-                    double diff = saldo - u.getSaldo();
-                    if (diff > 0) u.addSaldo(diff);
-                    else if (diff < 0) u.subSaldo(-diff);
-                    return u;
-                }
-            }
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+			stmt.setString(1, cpf);
+			try (ResultSet rs = stmt.executeQuery()) {
+				if (rs.next()) {
+					String nome = rs.getString("nome");
+					String senha = rs.getString("senha");
+					double saldo = rs.getDouble("saldo");
+					Usuario u = new Usuario(nome, cpf, senha);
+					double diff = saldo - u.getSaldo();
+					if (diff > 0)
+						u.addSaldo(diff);
+					else if (diff < 0)
+						u.subSaldo(-diff);
+					return u;
+				}
+			}
 
-        return null;
-    }
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 
-    public List<Usuario> listarTodos() {
-        List<Usuario> usuarios = new ArrayList<>();
-        String sql = "SELECT cpf, nome, senha, saldo FROM usuarios";
+		return null;
+	}
 
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+	public List<Usuario> listarTodos() {
+		List<Usuario> usuarios = new ArrayList<>();
+		String sql = "SELECT cpf, nome, senha, saldo FROM usuarios";
 
-            while (rs.next()) {
-                String cpf = rs.getString("cpf");
-                String nome = rs.getString("nome");
-                String senha = rs.getString("senha");
-                double saldo = rs.getDouble("saldo");
-                Usuario u = new Usuario(nome, cpf, senha);
-                double diff = saldo - u.getSaldo();
-                if (diff > 0) u.addSaldo(diff);
-                else if (diff < 0) u.subSaldo(-diff);
-                usuarios.add(u);
-            }
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				Statement stmt = conn.createStatement();
+				ResultSet rs = stmt.executeQuery(sql)) {
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+			while (rs.next()) {
+				String cpf = rs.getString("cpf");
+				String nome = rs.getString("nome");
+				String senha = rs.getString("senha");
+				double saldo = rs.getDouble("saldo");
+				Usuario u = new Usuario(nome, cpf, senha);
+				double diff = saldo - u.getSaldo();
+				if (diff > 0)
+					u.addSaldo(diff);
+				else if (diff < 0)
+					u.subSaldo(-diff);
+				usuarios.add(u);
+			}
 
-        return usuarios;
-    }
- // (apenas o trecho completo do arquivo já no seu projeto foi sobrescrito; aqui está o método novo)
- // Local do arquivo: src/main/java/com/pix/dao/UsuarioDAO.java
- // > O arquivo completo do DAO permanece o mesmo, com a adição abaixo:
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 
-     /**
-      * Tenta obter as colunas criado_em e atualizado_em para o usuário
-      * Retorna um array de Strings [criadoEm, atualizadoEm] no formato ISO_LOCAL_DATE_TIME,
-      * ou nulls se as colunas não existirem.
-      */
-     public String[] getTimestamps(String cpf) {
-         String[] res = new String[] { null, null };
-         String sql = "SELECT criado_em, atualizado_em FROM usuarios WHERE cpf = ?";
-         try (Connection conn = DatabaseManager.getInstance().getConnection();
-              PreparedStatement ps = conn.prepareStatement(sql)) {
-             ps.setString(1, cpf);
-             try (ResultSet rs = ps.executeQuery()) {
-                 if (rs.next()) {
-                     try {
-                         Timestamp t1 = rs.getTimestamp("criado_em");
-                         if (t1 != null) res[0] = t1.toLocalDateTime().toString();
-                     } catch (SQLException e) {
-                         // coluna não existe ou outro problema; retornar nulos
-                     }
-                     try {
-                         Timestamp t2 = rs.getTimestamp("atualizado_em");
-                         if (t2 != null) res[1] = t2.toLocalDateTime().toString();
-                     } catch (SQLException e) {
-                         // coluna não existe
-                     }
-                 }
-             }
-         } catch (SQLException e) {
-             // Problema acessando banco; retornamos nulos
-             // e imprimimos stacktrace para debug
-             e.printStackTrace();
-         }
-         return res;
-     }
+		return usuarios;
+	}
+
+	public String[] getTimestamps(String cpf) {
+		String[] res = new String[] { null, null };
+		String sql = "SELECT criado_em, atualizado_em FROM usuarios WHERE cpf = ?";
+		try (Connection conn = DatabaseManager.getInstance().getConnection();
+				PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setString(1, cpf);
+			try (ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) {
+					try {
+						Timestamp t1 = rs.getTimestamp("criado_em");
+						if (t1 != null)
+							res[0] = t1.toLocalDateTime().toString();
+					} catch (SQLException e) {
+
+					}
+					try {
+						Timestamp t2 = rs.getTimestamp("atualizado_em");
+						if (t2 != null)
+							res[1] = t2.toLocalDateTime().toString();
+					} catch (SQLException e) {
+
+					}
+				}
+			}
+		} catch (SQLException e) {
+
+			e.printStackTrace();
+		}
+		return res;
+	}
 
 }

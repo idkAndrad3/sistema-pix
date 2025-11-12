@@ -1,6 +1,7 @@
 package com.pix.client;
 
 import java.io.BufferedReader;
+import validador.Validator;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -75,54 +76,80 @@ public class PixClient {
 	}
 
 	private JsonNode sendRequest(ObjectNode request) throws IOException {
-        try {
-            // 1. Envia a requisição
-            if (out == null) {
-                 throw new IOException("Cliente não está conectado (PrintWriter nulo).");
-            }
-            out.println(mapper.writeValueAsString(request));
 
-            // 2. Lê a resposta
-            if (in == null) {
-                throw new IOException("Cliente não está conectado (BufferedReader nulo).");
-            }
-            String responseStr = in.readLine();
+		String operacaoOriginal = request.path("operacao").asText("desconhecida");
 
-            // 3. Verifica se a conexão foi fechada (Regra 5.2 e 7.3)
-            if (responseStr == null) {
-                // O servidor encerrou a conexão ativamente (ex: timeout ou erro)
-                disconnect(); // <--- CORREÇÃO: Desconectar ativamente
-                throw new IOException("Conexão encerrada pelo servidor.");
-            }
+		try {
 
-            // 4. Tenta parsear o JSON (Regra 5.2)
-            JsonNode responseNode = mapper.readTree(responseStr);
+			if (out == null) {
+				throw new IOException("Cliente não está conectado (PrintWriter nulo).");
+			}
+			out.println(mapper.writeValueAsString(request));
 
-            // 5. Validação mínima (Regra 5.2)
-            // Se os campos base do protocolo não existirem, a resposta é inválida.
-            if (responseNode == null || 
-                responseNode.path("operacao").isMissingNode() || 
-                responseNode.path("status").isMissingNode() ||
-                responseNode.path("info").isMissingNode()) 
-            {
-                disconnect(); // <--- CORREÇÃO: Desconectar
-                throw new IOException("Resposta inválida do servidor (faltando campos do protocolo). Conexão encerrada.");
-            }
+			if (in == null) {
+				throw new IOException("Cliente não está conectado (BufferedReader nulo).");
+			}
+			String responseStr = in.readLine();
 
-            return responseNode;
+			if (responseStr == null) {
+				disconnect();
+				throw new IOException("Conexão encerrada pelo servidor.");
+			}
 
-        } catch (IOException e) { // Captura SocketException, JsonProcessingException, etc.
-            // 6. Captura QUALQUER erro de IO ou Parsing (Regra 5.2)
-            // Se não conseguirmos ler ou parsear, a conexão não é confiável.
-            
-            disconnect(); // <--- CORREÇÃO: Desconectar
-            
-            // 7. Propaga o erro para que os métodos (login, lerUsuario) parem
-            throw new IOException("Erro crítico de comunicação ou JSON inválido: " + e.getMessage(), e);
-        }
-    }
+			JsonNode responseNode;
+			try {
+				responseNode = mapper.readTree(responseStr);
+			} catch (Exception e) {
 
-	// --- Classes de Resultado --- //
+				String infoErro = "Erro de sintaxe. A resposta do servidor não é um JSON válido: " + responseStr;
+				reportarErroServidor(operacaoOriginal, infoErro);
+				disconnect();
+				throw new IOException(infoErro, e);
+
+			}
+
+			try {
+				Validator.validateServer(responseStr);
+			} catch (Exception e) {
+				String infoErro = "Resposta inválida do servidor (não conforme ao protocolo): " + e.getMessage();
+				reportarErroServidor(operacaoOriginal, infoErro);
+				disconnect();
+				throw new IOException(infoErro + " Conexão encerrada.", e);
+
+			}
+
+			return responseNode;
+
+		} catch (IOException e) {
+			disconnect();
+
+			throw new IOException("Erro crítico de comunicação: " + e.getMessage(), e);
+		}
+	}
+
+	private void reportarErroServidor(String operacaoOriginal, String info) {
+		try {
+			if (out == null) {
+
+				System.err.println("[CLIENTE] Quis reportar erro, mas já estava desconectado: " + info);
+				return;
+			}
+
+			ObjectNode erroReq = mapper.createObjectNode();
+			erroReq.put("operacao", "erro_servidor");
+			erroReq.put("operacao_enviada", operacaoOriginal);
+			erroReq.put("info", info);
+
+			String jsonErro = mapper.writeValueAsString(erroReq);
+			System.err.println("[CLIENTE] Reportando erro ao servidor: " + jsonErro);
+
+			out.println(jsonErro);
+
+		} catch (Exception e) {
+
+			System.err.println("Falha crítica ao tentar reportar erro ao servidor: " + e.getMessage());
+		}
+	}
 
 	public static class OperationResult {
 		private boolean success;
@@ -181,7 +208,7 @@ public class PixClient {
 	}
 
 	public static class TransactionResult extends OperationResult {
-		private String transacoesJson; // Manter como string para evitar complexidade de parsing aqui
+		private String transacoesJson;
 
 		public TransactionResult(boolean success, String message, String transacoesJson) {
 			super(success, message);
@@ -192,8 +219,6 @@ public class PixClient {
 			return transacoesJson;
 		}
 	}
-
-	// --- Métodos de Operação --- //
 
 	public OperationResult criarUsuario(String cpf, String nome, String senha) {
 		try {
@@ -220,14 +245,14 @@ public class PixClient {
 			String info = resp.path("info").asText();
 			String token = null;
 			if (status) {
-				// tenta primeiro em dados.token, se não existir tenta token no root
+
 				if (resp.has("token") && !resp.path("token").asText().isEmpty()) {
 					token = resp.path("token").asText();
 				} else {
 					token = null;
 				}
 			}
-			// Log de diagnóstico
+
 			System.out.println(
 					"[DEBUG] login() -> status=" + status + " token='" + (token == null ? "null" : token) + "'");
 			return new LoginResult(status, info, token);
@@ -249,34 +274,40 @@ public class PixClient {
 	}
 
 	public UserDataResult lerUsuario(String token) {
-	    try {
-	        ObjectNode req = mapper.createObjectNode();
-	        req.put("operacao", "usuario_ler");
-	        req.put("token", token);
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_ler");
+			req.put("token", token);
 
-	        JsonNode resp = sendRequest(req);
-	        boolean status = resp.path("status").asBoolean(false);
-	        String info = resp.path("info").asText("");
+			JsonNode resp = sendRequest(req);
+			boolean status = resp.path("status").asBoolean(false);
+			String info = resp.path("info").asText("");
 
-	        if (status) {
-	            // ---- INÍCIO DA CORREÇÃO ----
-	            // O protocolo diz que o objeto "usuario" vem direto na resposta.
-	            // Vamos procurá-lo diretamente no objeto 'resp'.
-	            JsonNode usuarioNode = resp.path("usuario");
+			if (status) {
 
-	            String nome = usuarioNode.path("nome").asText("");
-	            String cpf = usuarioNode.path("cpf").asText("");
-	            double saldo = usuarioNode.path("saldo").asDouble(0.0);
-	            // ---- FIM DA CORREÇÃO ----
+				JsonNode usuarioNode = resp.path("usuario");
 
-	            return new UserDataResult(true, info, nome, cpf, saldo);
-	        } else {
-	            return new UserDataResult(false, info, "", "", 0.0);
-	        }
-	    } catch (Exception e) {
-	        e.printStackTrace();
-	        return new UserDataResult(false, "Erro: " + e.getMessage(), "", "", 0.0);
-	    }
+				if (usuarioNode.isNull() || usuarioNode.isMissingNode()) {
+
+					reportarErroServidor("usuario_ler", "O campo 'usuario' veio nulo ou ausente na resposta.");
+
+					return new UserDataResult(false,
+							"Falha de protocolo: O servidor enviou uma resposta incompleta (usuário nulo).", "", "",
+							0.0);
+				}
+
+				String nome = usuarioNode.path("nome").asText("");
+				String cpf = usuarioNode.path("cpf").asText("");
+				double saldo = usuarioNode.path("saldo").asDouble(0.0);
+
+				return new UserDataResult(true, info, nome, cpf, saldo);
+			} else {
+				return new UserDataResult(false, info, "", "", 0.0);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			return new UserDataResult(false, "Erro: " + e.getMessage(), "", "", 0.0);
+		}
 	}
 
 	public OperationResult atualizarUsuario(String token, String novoNome, String novaSenha) {
@@ -298,36 +329,34 @@ public class PixClient {
 			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
 		}
 	}
-	
+
 	public OperationResult deletarUsuario(String token) {
-        try {
-            ObjectNode req = mapper.createObjectNode();
-            req.put("operacao", "usuario_deletar");
-            req.put("token", token);
-            JsonNode resp = sendRequest(req);
-            return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
-        } catch (IOException e) {
-            return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
-        }
-    }
-	
-	// Adicione este método estático na classe PixClient em src/main/java/com/pix/client/PixClient.java
+		try {
+			ObjectNode req = mapper.createObjectNode();
+			req.put("operacao", "usuario_deletar");
+			req.put("token", token);
+			JsonNode resp = sendRequest(req);
+			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
+		} catch (IOException e) {
+			return new OperationResult(false, "Erro de comunicação: " + e.getMessage());
+		}
+	}
 
-    public static RespostaBase opUsuarioDeletar(JsonNode req) {
-        String cpf = validateToken(req);
-        if (cpf == null) {
-            return new RespostaBase("usuario_deletar", false, "Token inválido ou expirado");
-        }
+	public static RespostaBase opUsuarioDeletar(JsonNode req) {
+		String cpf = validateToken(req);
+		if (cpf == null) {
+			return new RespostaBase("usuario_deletar", false, "Token inválido ou expirado");
+		}
 
-        boolean deletado = usuarioDAO.deletar(cpf);
+		boolean deletado = usuarioDAO.deletar(cpf);
 
-        if (deletado) {
-            TokenManager.removeToken(req.path("token").asText("")); // Invalida o token
-            return new RespostaBase("usuario_deletar", true, "Usuário deletado com sucesso.");
-        } else {
-            return new RespostaBase("usuario_deletar", false, "Erro ao deletar usuário.");
-        }
-    }
+		if (deletado) {
+			TokenManager.removeToken(req.path("token").asText(""));
+			return new RespostaBase("usuario_deletar", true, "Usuário deletado com sucesso.");
+		} else {
+			return new RespostaBase("usuario_deletar", false, "Erro ao deletar usuário.");
+		}
+	}
 
 	public OperationResult criarTransacao(String token, double valor, String cpfDestino) {
 		try {
@@ -402,13 +431,11 @@ public class PixClient {
 			return new RespostaBase("usuario_criar", false, "Senha deve ter entre 6 e 120 caracteres");
 		}
 
-		// Verificar se usuário já existe no banco
 		Usuario existente = usuarioDAO.buscarPorCpf(cpf);
 		if (existente != null) {
 			return new RespostaBase("usuario_criar", false, "Usuário já existente");
 		}
 
-		// Criar e salvar novo usuário
 		Usuario u = new Usuario(nome, cpf, senha);
 		usuarioDAO.salvar(u);
 
@@ -460,7 +487,6 @@ public class PixClient {
 			return new RespostaBase("usuario_ler", false, "Token inválido ou expirado");
 		}
 
-		// Buscar usuário atualizado no banco
 		Usuario u = usuarioDAO.buscarPorCpf(cpf);
 		if (u == null) {
 			return new RespostaBase("usuario_ler", false, "Usuário não encontrado");
@@ -472,7 +498,6 @@ public class PixClient {
 		usuarioMap.put("cpf", u.getCpf());
 		usuarioMap.put("saldo", u.getSaldo());
 		r.setUsuario(usuarioMap);
-		
 
 		return r;
 
@@ -499,24 +524,20 @@ public class PixClient {
 			return new RespostaBase("transacao_criar", false, "Não é possível transferir para si mesmo");
 		}
 
-		// Verificar se usuário de origem existe e tem saldo
 		Usuario origem = usuarioDAO.buscarPorCpf(cpf);
 		if (origem == null) {
 			return new RespostaBase("transacao_criar", false, "Usuário de origem não encontrado");
 		}
-		
 
 		if (origem.getSaldo() < valor) {
 			return new RespostaBase("transacao_criar", false, "Saldo insuficiente");
 		}
 
-		// Verificar se usuário de destino existe
 		Usuario destino = usuarioDAO.buscarPorCpf(cpfDestino);
 		if (destino == null) {
 			return new RespostaBase("transacao_criar", false, "Usuário de destino não encontrado");
 		}
 
-		// Criar e salvar transação (o DAO já atualiza os saldos)
 		Transacao t = new Transacao(cpf, cpfDestino, valor);
 		transacaoDAO.salvar(t);
 
@@ -525,85 +546,78 @@ public class PixClient {
 	}
 
 	public static RespostaBase opTransacaoLer(JsonNode req) {
-	    String cpf = validateToken(req);
-	    if (cpf == null) {
-	        return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
-	    }
-	    
-	    // Extrair e validar datas
-	    String dataInicialStr = req.path("data_inicial").asText("").trim();
-	    String dataFinalStr = req.path("data_final").asText("").trim();
+		String cpf = validateToken(req);
+		if (cpf == null) {
+			return new RespostaBase("transacao_ler", false, "Token inválido ou expirado");
+		}
 
-	    if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
-	        return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
-	    }
+		String dataInicialStr = req.path("data_inicial").asText("").trim();
+		String dataFinalStr = req.path("data_final").asText("").trim();
 
-	    LocalDateTime dataInicial;
-	    LocalDateTime dataFinal;
-	    try {
-	        // Usar formatter que aceita formato UTC com 'Z'
-	        DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
-	        dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
-	        dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
-	    } catch (Exception e) {
-	        return new RespostaBase("transacao_ler", false,
-	                "Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
-	    }
-	    if (dataInicial.plusDays(31).isBefore(dataFinal)) {
-	    		        return new RespostaBase("transacao_ler", false, "O período de consulta não pode exceder 31 dias.");
-	    		    }
+		if (dataInicialStr.isEmpty() || dataFinalStr.isEmpty()) {
+			return new RespostaBase("transacao_ler", false, "Datas inicial e final são obrigatórias");
+		}
 
-	    // Buscar transações do usuário no intervalo
-	    List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
+		LocalDateTime dataInicial;
+		LocalDateTime dataFinal;
+		try {
 
-	    // Preparar a resposta
-	    RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
-	    List<Map<String, Object>> transacoesList = new ArrayList<>();
+			DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
+			dataInicial = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataInicialStr)), ZoneOffset.UTC);
+			dataFinal = LocalDateTime.ofInstant(Instant.from(formatter.parse(dataFinalStr)), ZoneOffset.UTC);
+		} catch (Exception e) {
+			return new RespostaBase("transacao_ler", false,
+					"Formato de data inválido. Use o formato ISO 8601 UTC (ex: 2024-05-01T00:00:00Z)");
+		}
+		if (dataInicial.plusDays(31).isBefore(dataFinal)) {
+			return new RespostaBase("transacao_ler", false, "O período de consulta não pode exceder 31 dias.");
+		}
 
-	    for (Transacao t : transacoes) {
-	        Map<String, Object> transacaoMap = new HashMap<>();
+		List<Transacao> transacoes = transacaoDAO.listarPorCpfEData(cpf, dataInicial, dataFinal);
 
-	        transacaoMap.put("id", t.getId());
-	        transacaoMap.put("valor_enviado", t.getValor());
+		RespostaBase r = new RespostaBase("transacao_ler", true, "Transações listadas com sucesso");
+		List<Map<String, Object>> transacoesList = new ArrayList<>();
 
-	        // ---- INÍCIO DA CORREÇÃO ----
-	        // Buscar usuário enviador com verificação de nulo
-	        Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
-	        Map<String, String> enviadorMap = new HashMap<>();
-	        if (enviador != null) {
-	            enviadorMap.put("cpf", enviador.getCpf());
-	            enviadorMap.put("nome", enviador.getNome());
-	        } else {
-	            enviadorMap.put("cpf", t.getCpfOrigem());
-	            enviadorMap.put("nome", "Usuário Deletado"); // Fallback
-	        }
-	        transacaoMap.put("usuario_enviador", enviadorMap);
+		for (Transacao t : transacoes) {
+			Map<String, Object> transacaoMap = new HashMap<>();
 
-	        // Buscar usuário recebedor com verificação de nulo
-	        Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
-	        Map<String, String> recebedorMap = new HashMap<>();
-	        if (recebedor != null) {
-	            recebedorMap.put("cpf", recebedor.getCpf());
-	            recebedorMap.put("nome", recebedor.getNome());
-	        } else {
-	            recebedorMap.put("cpf", t.getCpfDestino());
-	            recebedorMap.put("nome", "Usuário Deletado"); // Fallback
-	        }
-	        transacaoMap.put("usuario_recebedor", recebedorMap);
-	        // ---- FIM DA CORREÇÃO ----
+			transacaoMap.put("id", t.getId());
+			transacaoMap.put("valor_enviado", t.getValor());
 
-	        // Formatar datas no formato UTC com 'Z'
-	        transacaoMap.put("criado_em",
-	                t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
-	        transacaoMap.put("atualizado_em",
-	                t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+			Usuario enviador = usuarioDAO.buscarPorCpf(t.getCpfOrigem());
+			Map<String, String> enviadorMap = new HashMap<>();
+			if (enviador != null) {
+				enviadorMap.put("cpf", enviador.getCpf());
+				enviadorMap.put("nome", enviador.getNome());
+			} else {
+				enviadorMap.put("cpf", t.getCpfOrigem());
+				enviadorMap.put("nome", "Usuário Deletado");
+			}
+			transacaoMap.put("usuario_enviador", enviadorMap);
 
-	        transacoesList.add(transacaoMap);
-	    }
+			Usuario recebedor = usuarioDAO.buscarPorCpf(t.getCpfDestino());
+			Map<String, String> recebedorMap = new HashMap<>();
+			if (recebedor != null) {
+				recebedorMap.put("cpf", recebedor.getCpf());
+				recebedorMap.put("nome", recebedor.getNome());
+			} else {
+				recebedorMap.put("cpf", t.getCpfDestino());
+				recebedorMap.put("nome", "Usuário Deletado");
+			}
+			transacaoMap.put("usuario_recebedor", recebedorMap);
 
-	    r.setTransacoes(transacoesList);
-	    return r;
+			transacaoMap.put("criado_em",
+					t.getCriadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+			transacaoMap.put("atualizado_em",
+					t.getAtualizadoEm().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+
+			transacoesList.add(transacaoMap);
+		}
+
+		r.setTransacoes(transacoesList);
+		return r;
 	}
+
 	public static RespostaBase opDepositar(JsonNode req) {
 		String cpf = validateToken(req);
 		if (cpf == null) {
@@ -616,14 +630,13 @@ public class PixClient {
 			return new RespostaBase("depositar", false, "Valor deve ser positivo");
 		}
 
-		// Buscar usuário no banco
 		Usuario u = usuarioDAO.buscarPorCpf(cpf);
 		if (u == null) {
 			return new RespostaBase("depositar", false, "Usuário não encontrado");
 		}
 		Transacao t = new Transacao(cpf, cpf, valor);
 		transacaoDAO.salvar(t);
-		// Atualizar saldo
+
 		u.addSaldo(valor);
 		usuarioDAO.atualizar(u);
 
@@ -632,33 +645,28 @@ public class PixClient {
 	}
 
 	public static RespostaBase opUsuarioAtualizar(JsonNode req) {
-		// Valida token e obtém o CPF do usuário dono do token
+
 		String cpf = validateToken(req);
 		if (cpf == null) {
 			return new RespostaBase("usuario_atualizar", false, "Token inválido ou expirado");
 		}
 
-		// aceitar duas formas: { usuario: { nome, senha } } ou { nome, senha }
-		// diretamente
 		JsonNode usuarioNode = req.has("usuario") ? req.path("usuario") : req;
 
 		String novoNome = usuarioNode.path("nome").asText(null);
 		String novaSenha = usuarioNode.path("senha").asText(null);
 
-		// Se nenhum campo para atualizar, retorna erro
 		if ((novoNome == null || novoNome.trim().isEmpty()) && (novaSenha == null || novaSenha.trim().isEmpty())) {
 			return new RespostaBase("usuario_atualizar", false, "Nenhum campo para atualizar");
 		}
 
-		// Buscar o usuário atual no banco
 		Usuario u = usuarioDAO.buscarPorCpf(cpf);
 		if (u == null) {
 			return new RespostaBase("usuario_atualizar", false, "Usuário não encontrado");
 		}
 
-		// Atualizar campos (preservar saldo e CPF)
 		if (novoNome != null && !novoNome.trim().isEmpty()) {
-			// validações básicas (opcional)
+
 			if (novoNome.length() < 6 || novoNome.length() > 120) {
 				return new RespostaBase("usuario_atualizar", false, "Nome deve ter entre 6 e 120 caracteres");
 			}
@@ -671,10 +679,8 @@ public class PixClient {
 			u.setSenha(novaSenha.trim());
 		}
 
-		// Persistir alteração no banco
 		usuarioDAO.atualizar(u);
 
-		// Responder sucesso
 		return new RespostaBase("usuario_atualizar", true, "Dados atualizados com sucesso");
 	}
 }
