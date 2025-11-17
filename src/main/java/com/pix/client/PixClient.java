@@ -84,13 +84,15 @@ public class PixClient {
 			if (out == null) {
 				throw new IOException("Cliente não está conectado (PrintWriter nulo).");
 			}
-			out.println(mapper.writeValueAsString(request));
-
+			
+			String jsonRequest = mapper.writeValueAsString(request);
+			System.out.println("\n>> [CLIENTE ENVIANDO] " + jsonRequest);
+			out.println(jsonRequest);
 			if (in == null) {
 				throw new IOException("Cliente não está conectado (BufferedReader nulo).");
 			}
 			String responseStr = in.readLine();
-
+			System.out.println("<< [CLIENTE RECEBENDO] " + responseStr);
 			if (responseStr == null) {
 				disconnect();
 				throw new IOException("Conexão encerrada pelo servidor.");
@@ -378,6 +380,7 @@ public class PixClient {
 			req.put("operacao", "depositar");
 			req.put("token", token);
 			req.put("valor_enviado", valor);
+
 			JsonNode resp = sendRequest(req);
 			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
 		} catch (IOException e) {

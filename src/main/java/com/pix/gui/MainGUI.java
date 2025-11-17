@@ -690,10 +690,7 @@ public class MainGUI extends JFrame {
 
 		if (option == JOptionPane.YES_OPTION) {
 			client.logout(token);
-			client.disconnect();
-
-			// Voltar para tela de login
-			LoginGUI loginGUI = new LoginGUI();
+			LoginGUI loginGUI = new LoginGUI(this.client); 
 			loginGUI.setVisible(true);
 			this.dispose();
 		}

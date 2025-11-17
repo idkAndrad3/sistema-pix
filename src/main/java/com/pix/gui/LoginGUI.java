@@ -55,6 +55,27 @@ public class LoginGUI extends JFrame {
 		setupEventHandlers();
 		applyTheme();
 	}
+	public LoginGUI(PixClient existingClient) {
+		// 1. Chama o construtor padrão para construir a interface
+		this(); 
+		
+		// 2. Armazena o cliente que já estava conectado
+		this.client = existingClient; 
+
+		// 3. Atualiza a interface para o estado "Conectado"
+		statusLabel.setText("✅ Conectado");
+		statusLabel.setForeground(new Color(0, 180, 0));
+		conectarButton.setText("Desconectar");
+		setFieldsEnabled(true); // Ativa os campos de login/cadastro
+
+		// 4. Remove a ação padrão "conectarServidor" do botão
+		for (ActionListener al : conectarButton.getActionListeners()) {
+			conectarButton.removeActionListener(al);
+		}
+		
+		// 5. Adiciona a ação "desconectarServidor"
+		conectarButton.addActionListener(e -> desconectarServidor());
+	}
 
 	private void initializeComponents() {
 		setTitle("💸 PixFácil - Login");
