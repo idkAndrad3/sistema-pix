@@ -204,7 +204,22 @@ public class PixServer {
 					logger.accept("[ENVIANDO] para " + remote + ": " + jsonResp);
 					Validator.validateServer(jsonResp);
 					out.println(jsonResp);
+				} catch (IllegalArgumentException e) {
+					// 1. Logar o erro no servidor
+					logger.accept("[PROTOCOLO VIOLADO] " + remote + ": " + e.getMessage()
+							+ " -> Enviando erro e encerrando.");
 
+					// 2. Criar a resposta de erro para o cliente saber o motivo
+					// Usamos a variável 'operacao' que já foi extraída no início do try
+					RespostaBase erroProtocolo = new RespostaBase(operacao, false,
+							"Erro no processamento: " + e.getMessage());
+
+					// 3. Enviar a resposta JSON
+					String jsonErro = mapper.writeValueAsString(erroProtocolo);
+					out.println(jsonErro);
+
+					// 4. Encerrar a conexão (o finally fechará o socket)
+					return;
 				} catch (Exception e) {
 
 					if (e.getMessage().contains("O campo obrigatório 'operacao'")) {
@@ -218,6 +233,7 @@ public class PixServer {
 					out.println(jsonErro);
 
 				}
+
 			}
 		} catch (IOException e) {
 

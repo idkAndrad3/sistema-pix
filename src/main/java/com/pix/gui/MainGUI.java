@@ -73,6 +73,7 @@ public class MainGUI extends JFrame {
 	private JTextField novoNomeField;
 	private JPasswordField novaSenhaField;
 	private JButton deletarButton;
+	private JButton atualizarSaldoButton;
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	// Novos componentes para depósito
@@ -118,7 +119,10 @@ public class MainGUI extends JFrame {
 		saldoLabel = new JLabel("Saldo: Carregando...");
 		saldoLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
 		saldoLabel.setForeground(new Color(0, 150, 0));
-
+		//Atualizar Saldo
+		atualizarSaldoButton = new JButton("Atualizar Saldo");
+	    atualizarSaldoButton.setToolTipText("Clique para buscar o saldo mais recente no servidor");
+		
 		// Campos para PIX
 		valorPixField = new JFormattedTextField();
 		((AbstractDocument) valorPixField.getDocument()).setDocumentFilter(new CurrencyDocumentFilter());
@@ -201,22 +205,32 @@ public class MainGUI extends JFrame {
 		// Panel superior - informações do usuário
 		JPanel userPanel = new JPanel(new GridBagLayout());
 		userPanel.setBorder(BorderFactory.createTitledBorder("Dados do Usuário"));
-		userPanel.setBackground(new Color(240, 248, 255));
+		userPanel.setBackground(new Color(240, 248, 255));	
 
-		GridBagConstraints gbc = new GridBagConstraints();
-		gbc.insets = new Insets(10, 10, 10, 10);
-		gbc.anchor = GridBagConstraints.WEST;
+	    GridBagConstraints gbc = new GridBagConstraints();
+	    gbc.insets = new Insets(10, 10, 10, 10);
+	    gbc.anchor = GridBagConstraints.WEST;
 
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		userPanel.add(nomeLabel, gbc);
-		gbc.gridx = 1;
-		userPanel.add(cpfLabel, gbc);
+	    // Linha 0: Nome e CPF
+	    gbc.gridx = 0;
+	    gbc.gridy = 0;
+	    userPanel.add(nomeLabel, gbc);
+	    
+	    gbc.gridx = 1;
+	    userPanel.add(cpfLabel, gbc);
 
-		gbc.gridx = 0;
-		gbc.gridy = 1;
-		gbc.gridwidth = 2;
-		userPanel.add(saldoLabel, gbc);
+	    // Linha 1: Saldo e Botão Atualizar
+	    gbc.gridx = 0;
+	    gbc.gridy = 1;
+	    gbc.gridwidth = 1; // Alterado de 2 para 1 para dividir espaço com o botão
+	    userPanel.add(saldoLabel, gbc);
+
+	    // Adicionando o botão ao lado do saldo
+	    gbc.gridx = 1;
+	    gbc.gridy = 1;
+	    gbc.gridwidth = 1;
+	    userPanel.add(atualizarSaldoButton, gbc);
+
 
 		// Panel central - operações
 		JTabbedPane tabbedPane = new JTabbedPane();
@@ -415,6 +429,16 @@ public class MainGUI extends JFrame {
 				enviarPix();
 			}
 		});
+		
+		atualizarSaldoButton.addActionListener(new ActionListener() {
+	        @Override
+	        public void actionPerformed(ActionEvent e) {
+	            // Reaproveita o método que já busca dados do servidor
+	            carregarDadosUsuario();
+	            // Opcional: Feedback visual ou carregar extrato também
+	            // carregarExtrato(); 
+	        }
+	    });
 
 		depositoButton.addActionListener(new ActionListener() {
 			@Override

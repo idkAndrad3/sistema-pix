@@ -317,6 +317,9 @@ public class PixClient {
 			ObjectNode req = mapper.createObjectNode();
 			req.put("operacao", "usuario_atualizar");
 			req.put("token", token);
+			// --- LINHA DE TESTE (Remova depois) ---
+	        //req.put("admin", "true"); // Tentando virar admin (exemplo)
+	        // --------------------------------------
 			ObjectNode usuarioData = mapper.createObjectNode();
 			if (novoNome != null && !novoNome.isEmpty()) {
 				usuarioData.put("nome", novoNome);
@@ -367,6 +370,10 @@ public class PixClient {
 			req.put("token", token);
 			req.put("valor", valor);
 			req.put("cpf_destino", cpfDestino);
+			
+			// --- LINHA DE TESTE (Remova depois) ---
+	        //req.put("chave_extra", "valor_proibido"); 
+	        // --------------------------------------
 			JsonNode resp = sendRequest(req);
 			return new OperationResult(resp.path("status").asBoolean(), resp.path("info").asText());
 		} catch (IOException e) {
@@ -395,6 +402,9 @@ public class PixClient {
 			req.put("token", token);
 			req.put("data_inicial", dataInicial);
 			req.put("data_final", dataFinal);
+			// --- LINHA DE TESTE (Remova depois) ---
+	        //req.put("campo_invasor", "hack_teste");
+	        // --------------------------------------
 			JsonNode resp = sendRequest(req);
 			boolean status = resp.path("status").asBoolean();
 			String info = resp.path("info").asText();
